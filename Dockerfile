@@ -15,6 +15,7 @@ COPY vendor ./vendor
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4173
+ENV DATA_DIR=/app/data
 
 EXPOSE 4173
 

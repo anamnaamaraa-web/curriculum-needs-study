@@ -9,6 +9,7 @@ Hosting дээр дараах environment variables тохируулна.
 ```text
 HOST=0.0.0.0
 PORT=4173
+DATA_DIR=/app/data
 PUBLIC_BASE_URL=https://your-domain.mn
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.5
@@ -17,6 +18,7 @@ OPENAI_MODEL=gpt-5.5
 Тайлбар:
 
 - `PUBLIC_BASE_URL` нь хайлтын системийн `sitemap.xml` дотор гарах үндсэн домэйн.
+- `DATA_DIR` нь бүх хэрэглэгчийн shared дата хадгалах persistent folder.
 - `OPENAI_API_KEY` байхгүй бол нарийвчилсан AI шинжилгээ ажиллахгүй, харин энгийн/local шинжилгээ ажиллана.
 - `PORT`-ийг зарим hosting платформ автоматаар өгдөг. Тийм бол тухайн платформын өгсөн `PORT`-ийг ашиглуулна.
 
@@ -43,13 +45,25 @@ docker run -p 4173:4173 --env-file .env.local curriculum-needs-study
 
 Public сервер дээр reverse proxy эсвэл hosting provider нь HTTPS домэйнтэй холбож өгнө.
 
-Shared дата хадгалах path:
+Shared дата хадгалах path нь deploy хийх runtime-аас хамаарна.
+
+Docker runtime ашиглаж байвал:
 
 ```text
-/app/data/shared-state.json
+Mount path: /app/data
+DATA_DIR: /app/data
+Saved file: /app/data/shared-state.json
 ```
 
-Docker/hosting дээр дата алдагдуулахгүй байхын тулд `/app/data` path-д volume эсвэл persistent disk mount хийнэ.
+Native Node runtime ашиглаж байвал:
+
+```text
+Mount path: /opt/render/project/src/data
+DATA_DIR: /opt/render/project/src/data
+Saved file: /opt/render/project/src/data/shared-state.json
+```
+
+Docker/hosting дээр дата алдагдуулахгүй байхын тулд дээрх mount path-д volume эсвэл persistent disk mount хийнэ.
 
 ## 4. Хайлтын системд нээлттэй болгох
 

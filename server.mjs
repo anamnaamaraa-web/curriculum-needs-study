@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,11 +8,12 @@ const port = Number(process.env.PORT || 4173);
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceDir = path.resolve(rootDir, "..");
 const envPath = path.join(workspaceDir, ".env.local");
-const dataDir = path.join(rootDir, "data");
-const sharedStatePath = path.join(dataDir, "shared-state.json");
 
 await loadLocalEnv(envPath);
 
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
+const sharedStatePath = path.join(dataDir, "shared-state.json");
+const sharedStateBackupPath = path.join(dataDir, "shared-state.backup.json");
 const model = process.env.OPENAI_MODEL || "gpt-5.5";
 const publicBaseUrl = normalizePublicBaseUrl(process.env.PUBLIC_BASE_URL);
 const maxRequestBytes = 15_000_000;
@@ -314,8 +315,20 @@ async function saveSharedState(request, response) {
     }
   };
   await mkdir(dataDir, { recursive: true });
-  await writeFile(sharedStatePath, `${JSON.stringify(storedState, null, 2)}\n`, "utf8");
+  await backupExistingSharedState();
+  const tmpPath = path.join(dataDir, `shared-state.${process.pid}.${Date.now()}.tmp`);
+  await writeFile(tmpPath, `${JSON.stringify(storedState, null, 2)}\n`, "utf8");
+  await rename(tmpPath, sharedStatePath);
   return sendJson(response, 200, { ok: true, savedAt });
+}
+
+async function backupExistingSharedState() {
+  try {
+    const current = await readFile(sharedStatePath, "utf8");
+    await writeFile(sharedStateBackupPath, current, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
 }
 
 async function serveStatic(request, response) {
