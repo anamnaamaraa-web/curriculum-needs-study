@@ -21,7 +21,7 @@
       window.location.replace(localSite.href);
     }
   </script>
-  <link rel="stylesheet" href="styles.css?v=20260707-storage-error-details">
+  <link rel="stylesheet" href="styles.css?v=20260707-comparison-survey-program-scope">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Үндсэн агуулга руу шилжих</a>
@@ -503,6 +503,15 @@
               <form class="data-form" id="focus-form">
                 <div class="form-title"><span>З</span><div><h2>Захиалагчийн фокус бүлэг</h2><p>Дээд удирдлагын ярилцлагын бүтэц, гол үр дүн.</p></div></div>
                 <div class="field-grid">
+                  <label>Сургалтын хөтөлбөр
+                    <select name="programId" required>
+                      <option value="">Сонгоно уу</option>
+                      <option value="police">Цагдаагийн стратеги</option>
+                      <option value="border">Хилийн стратеги</option>
+                      <option value="corrections">Шүүхийн шийдвэр гүйцэтгэлийн стратеги</option>
+                      <option value="emergency">Онцгой байдлын стратеги</option>
+                    </select>
+                  </label>
                   <label>Байгууллага
                     <select name="agency" required>
                       <option value="">Сонгоно уу</option>
@@ -520,6 +529,7 @@
               </form>
               <div class="evidence-panel">
                 <div class="section-heading compact"><div><p class="eyebrow">БҮРТГЭЛ</p><h2>Фокус бүлгүүд</h2></div><span class="count-pill" id="focus-count">0</span></div>
+                <div class="focus-gap-summary" id="focus-gap-summary"></div>
                 <div class="evidence-list" id="focus-list"></div>
               </div>
             </div>
@@ -529,12 +539,64 @@
             <div class="tool-layout">
               <form class="data-form" id="comparison-form">
                 <div class="form-title"><span>О</span><div><h2>Олон улсын хөтөлбөр</h2><p>Зөвхөн байгууллагын албан ёсны хөтөлбөрийн мэдээлэл.</p></div></div>
+                <section class="program-context-panel" aria-labelledby="comparison-context-title">
+                  <div class="program-context-head">
+                    <span>01</span>
+                    <div>
+                      <p class="eyebrow">ШИНЖИЛГЭЭНИЙ КОНТЕКСТ</p>
+                      <h3 id="comparison-context-title">Сургалтын хөтөлбөрийн мэдээлэл</h3>
+                      <p>Эдгээр мэдээлэлд тулгуурлан олон улсын хөтөлбөрүүдийг тухайн хөтөлбөрийн хэрэгцээтэй харьцуулж, матрицад ангилна.</p>
+                    </div>
+                  </div>
+                  <div class="program-context-grid">
+                    <label class="span-two">Сургалтын хөтөлбөрийн нэр
+                      <input name="localProgramName" maxlength="300" required placeholder="Жишээ: Стратегийн удирдлагын магистрын хөтөлбөр">
+                    </label>
+                    <label>Сургалтын хөтөлбөрийн түвшин
+                      <select name="localProgramLevel" required>
+                        <option value="">Сонгоно уу</option>
+                        <option value="certificate">Богино хугацааны / сертификат</option>
+                        <option value="bachelor">Бакалавр</option>
+                        <option value="master">Магистр</option>
+                        <option value="doctorate">Доктор</option>
+                        <option value="professional">Мэргэжил дээшлүүлэх</option>
+                        <option value="other">Бусад</option>
+                      </select>
+                    </label>
+                    <label>Сургалтын хөтөлбөрийн зорилтот бүлэг
+                      <textarea name="localProgramTargetGroup" rows="3" maxlength="500" required placeholder="Жишээ: Хууль сахиулах байгууллагын дунд, ахлах шатны удирдах албан тушаалтан"></textarea>
+                    </label>
+                  </div>
+                  <p class="program-context-note"><span>i</span> Энэ самбарын мэдээлэл нь олон улсын хөтөлбөрийг ямар дотоод сургалтын хөтөлбөртэй харьцуулж байгааг тодорхойлно. Эх нотолгоогүй мэдээлэл ашиглахгүй.</p>
+                </section>
+                <label class="coverage-file-drop comparison-file-drop" for="comparison-file">
+                  <input id="comparison-file" type="file" accept=".pdf,.txt,.md">
+                  <span>⇧</span>
+                  <div><strong id="comparison-file-label">Англи хэл дээрх PDF/TXT хөтөлбөр сонгох</strong><small>Файлын текстийг уншаад доорх талбаруудыг монголоор автоматаар санал болгоно.</small></div>
+                </label>
+                <div class="coverage-file-status" id="comparison-file-status" hidden></div>
+                <div class="evidence-strict-warning">
+                  <strong>Зохиож бичихийг хориглоно.</strong>
+                  <span>Энэ хэсэгт зөвхөн эх PDF/TXT файл эсвэл албан ёсны холбоосоос илэрсэн мэдээллийг бүртгэнэ. Автомат санал нь эх текстийн лавлагаатай тулгагдаагүй бол судалгааны нотолгоо гэж ашиглахгүй.</span>
+                </div>
+                <div class="comparison-suggestions" id="comparison-suggestions" hidden></div>
                 <div class="field-grid">
+                  <label>Хамааруулах хөтөлбөр
+                    <select name="programId">
+                      <option value="all">Нийтлэг / бүх хөтөлбөр</option>
+                      <option value="police">Цагдаагийн стратеги</option>
+                      <option value="border">Хилийн стратеги</option>
+                      <option value="corrections">ШШГ стратеги</option>
+                      <option value="emergency">Онцгой байдлын стратеги</option>
+                    </select>
+                  </label>
                   <label>Улс<input name="country" required></label>
                   <label>Сургууль / агентлаг<input name="institution" required></label>
                   <label class="span-two">Хөтөлбөрийн нэр<input name="program" required></label>
                   <label>Нийт кредит<input name="credits" required placeholder="Жишээ: 120 ECTS"></label>
                   <label>Сургалтын хэлбэр<input name="format" required placeholder="Танхим, хосолсон..."></label>
+                  <label>Суралцах хугацаа<input name="duration" placeholder="Жишээ: 2 жил / 4 семестр"></label>
+                  <label>Багшийн шаардлага<input name="teacherRequirements" placeholder="Жишээ: PhD, салбарын туршлага"></label>
                   <label class="span-two">Албан ёсны холбоос<input name="url" type="url" required placeholder="https://..."></label>
                   <label class="span-two">Төгсөгчийн гол чадамж<textarea name="competencies" rows="3" required></textarea></label>
                 </div>
@@ -542,6 +604,15 @@
               </form>
               <div class="evidence-panel">
                 <div class="section-heading compact"><div><p class="eyebrow">МАТРИЦ</p><h2>Харьцуулах хөтөлбөрүүд</h2></div><span class="count-pill" id="comparison-count">0</span></div>
+                <div class="comparison-context-summary" id="comparison-context-summary"></div>
+                <div class="survey-source-filter comparison-program-filter" aria-label="Харьцуулсан хөтөлбөрийг хөтөлбөрөөр шүүх">
+                  <span>Хөтөлбөрөөр харах</span>
+                  <button class="source-filter active" type="button" data-comparison-program="all">Бүгд</button>
+                  <button class="source-filter" type="button" data-comparison-program="police">Цагдаагийн стратеги</button>
+                  <button class="source-filter" type="button" data-comparison-program="border">Хилийн стратеги</button>
+                  <button class="source-filter" type="button" data-comparison-program="corrections">ШШГ стратеги</button>
+                  <button class="source-filter" type="button" data-comparison-program="emergency">Онцгой байдлын стратеги</button>
+                </div>
                 <div class="evidence-list" id="comparison-list"></div>
               </div>
             </div>
@@ -591,8 +662,48 @@
             <div class="survey-divider"></div>
             <div class="survey-intro">
               <span class="step-badge">02</span>
-              <div><h2>Стратегийн удирдлагын чадамж</h2><p>1 = маш бага, 5 = маш өндөр. Баримт бичгийн шинжилгээгээр баталгаажсан нэгдсэн чадамжууд энэ хүснэгтэд автоматаар нэмэгдэнэ.</p></div>
+              <div><h2>Стратегийн удирдлагын чадамж</h2><p>1 = маш бага, 5 = маш өндөр. Баримт бичиг, фокус бүлэг, олон улсын харьцуулалтаас илэрсэн чадамжууд давтамжтайгаа нэг мөрөөр автоматаар нэмэгдэнэ.</p></div>
             </div>
+            <div class="survey-source-filter" aria-label="Чадамжийн эх үүсвэрээр шүүх">
+              <span>Эх үүсвэрээр шүүх</span>
+              <button class="source-filter active" type="button" data-survey-source="all">Бүгд</button>
+              <button class="source-filter" type="button" data-survey-source="document">Баримт бичгийн шинжилгээ</button>
+              <button class="source-filter" type="button" data-survey-source="focus">Фокус бүлэг</button>
+              <button class="source-filter" type="button" data-survey-source="comparison">Олон улсын харьцуулалт</button>
+            </div>
+            <div class="survey-source-filter survey-program-filter" aria-label="Чадамжийн жагсаалтыг хөтөлбөрөөр ангилах">
+              <span>Хөтөлбөрөөр ангилах</span>
+              <button class="source-filter active" type="button" data-survey-program="all">Бүх хөтөлбөр</button>
+              <button class="source-filter" type="button" data-survey-program="police">Цагдаагийн стратеги</button>
+              <button class="source-filter" type="button" data-survey-program="border">Хилийн стратеги</button>
+              <button class="source-filter" type="button" data-survey-program="corrections">ШШГ стратеги</button>
+              <button class="source-filter" type="button" data-survey-program="emergency">Онцгой байдлын стратеги</button>
+            </div>
+            <section class="coverage-checker learning-outcome-checker" aria-labelledby="learning-outcome-checker-title">
+              <div class="coverage-checker-head">
+                <span>ҮД</span>
+                <div>
+                  <p class="eyebrow">СУРАЛЦАХУЙН ҮР ДҮНГИЙН ХАРЬЦУУЛАЛТ</p>
+                  <h3 id="learning-outcome-checker-title">Суралцахуйн үр дүнд чадамж туссан эсэх</h3>
+                  <p>Хөтөлбөрийн суралцахуйн үр дүнг оруулахад тухайн хөтөлбөрөөр ангилсан чадамжийн жагсаалттай утга санааны түвшинд харьцуулна.</p>
+                </div>
+              </div>
+              <label class="coverage-text-label">Суралцахуйн үр дүнгүүдийг оруулна
+                <textarea id="learning-outcome-text" rows="7" placeholder="Жишээ: Төгсөгч стратегийн орчны өөрчлөлтийг шинжилж, нотолгоонд суурилсан шийдвэрийн хувилбар боловсруулна."></textarea>
+                <small><span id="learning-outcome-char-count">0</span> тэмдэгт</small>
+              </label>
+              <div class="coverage-actions">
+                <button class="button primary" id="analyze-learning-outcomes" type="button">Суралцахуйн үр дүнг харьцуулах</button>
+                <button class="text-button" id="export-learning-outcome-coverage" type="button" hidden>CSV татах</button>
+              </div>
+              <div class="coverage-summary" id="learning-outcome-summary" hidden>
+                <div><span>Тусгасан</span><strong id="learning-outcome-covered-count">0</strong></div>
+                <div><span>Хэсэгчлэн</span><strong id="learning-outcome-partial-count">0</strong></div>
+                <div><span>Илрээгүй</span><strong id="learning-outcome-missing-count">0</strong></div>
+              </div>
+              <p class="coverage-caution" id="learning-outcome-caution" hidden>Суралцахуйн үр дүнгийн өгүүлбэрийн утга санаанд суурилсан автомат харьцуулалт тул эцсийн дүгнэлтийг хөтөлбөрийн экспертээр баталгаажуулна.</p>
+              <div class="coverage-results" id="learning-outcome-results"></div>
+            </section>
             <div class="competency-table" id="competency-table">
               <div class="competency-head"><span>Чадамж</span><span>Одоогийн түвшин</span><span>Ирээдүйн чухалчлал</span></div>
             </div>
@@ -797,7 +908,7 @@
 
           <div class="method-warning">
             <span>!</span>
-            <p><strong>Арга зүйн нэршлийн баталгаажуулалт:</strong> Удирдамжид “EU‑STNA” болон “McGehee & Thayer-ийн 3 түвшний загвар” гэж дурдсан. Эцсийн тайланд арга зүйн тайлбар, эшлэлийг анхдагч албан ёсны эсвэл хянан магадалсан эх сурвалжаар тусад нь баталгаажуулна.</p>
+            <p><strong>Хатуу зарчим:</strong> Судалгааны бүх хэсэгт мэдээлэл зохиож бичихийг хориглоно. Автомат орчуулга, задлал, санал болгосон чадамж бүрийг эх файл, албан ёсны холбоос, хуудас/заалттай тулган баталгаажуулна. Эх нотолгоогүй мэдээллийг тайлан, шийдвэрийн үндэслэлд ашиглахгүй.</p>
           </div>
         </section>
       </main>
@@ -834,6 +945,6 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260707-storage-error-details"></script>
+  <script src="app.js?v=20260707-comparison-survey-program-scope"></script>
 </body>
 </html>

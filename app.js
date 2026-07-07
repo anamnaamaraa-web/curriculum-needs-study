@@ -1,4 +1,4 @@
-const appAssetBaseUrl = new URL(".", document.currentScript?.src || window.location.href);
+﻿const appAssetBaseUrl = new URL(".", document.currentScript?.src || window.location.href);
 const resolveAppAsset = (path) => new URL(path, appAssetBaseUrl).href;
 
 const taskDefinitions = [
@@ -114,8 +114,18 @@ let curriculumCoverageFileName = "";
 let curriculumCoverageText = "";
 let curriculumCoverageResults = [];
 let curriculumCoverageRunId = 0;
+let learningOutcomeCoverageText = "";
+let learningOutcomeCoverageResults = [];
+let learningOutcomeCoverageRunId = 0;
 let sharedStateSaveTimer = 0;
 let sharedStateSaveInFlight = Promise.resolve();
+let selectedSurveySourceFilter = "all";
+let selectedSurveyProgramFilter = "all";
+let selectedComparisonProgramFilter = "all";
+let comparisonImportSuggestions = [];
+let comparisonRejectedSuggestions = 0;
+let comparisonFormEvidence = {};
+let surveyDraftRatings = {};
 
 function defaultState() {
   const tasks = createTaskMap();
@@ -177,6 +187,7 @@ function createDefaultAccess() {
 function normalizeAccess(seed = {}) {
   const base = createDefaultAccess();
   const adminEmail = normalizeEmail(seed?.adminEmail || base.adminEmail) || base.adminEmail;
+  const protectedAdminEmails = adminEmailList(adminEmail);
   const currentEmail = normalizeEmail(sessionStorage.getItem(sessionEmailKey) || "");
   const roleViews = { ...base.roleViews };
   ["researcher", "viewer"].forEach((roleId) => {
@@ -195,9 +206,9 @@ function normalizeAccess(seed = {}) {
             ? user.programs.filter((programId) => programDefinitions.some((program) => program.id === programId))
             : programDefinitions.map((program) => program.id)
         }))
-        .filter((user) => user.email && user.email !== adminEmail)
+        .filter((user) => user.email && !protectedAdminEmails.includes(user.email))
     : base.users;
-  const currentRole = currentEmail === adminEmail ? "admin" : (users.find((user) => user.email === currentEmail)?.role || "viewer");
+  const currentRole = isAdminEmail(currentEmail, { adminEmail }) ? "admin" : (users.find((user) => user.email === currentEmail)?.role || "viewer");
   const passwords = seed?.passwords && typeof seed.passwords === "object" ? seed.passwords : {};
   return { adminEmail, currentEmail, currentRole, roleViews, users, passwords };
 }
@@ -408,7 +419,7 @@ async function saveSharedStateNow() {
     throw new Error(`API JSON биш хариу буцаалаа. Энэ линк static hosting байж магадгүй. HTTP ${response.status}`);
   }
   if (!response.ok) {
-    throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+    throw new Error(readableStoragePayloadMessage(payload, response.status));
   }
   const saveState = $("#save-state");
   if (saveState && payload.savedAt) saveState.textContent = "Серверт хадгалагдсан";
@@ -416,12 +427,48 @@ async function saveSharedStateNow() {
 }
 
 function storageErrorMessage(error) {
-  const message = String(error?.message || error || "");
+  const message = stringifyErrorMessage(error);
   if (/HTTP 404|not found/i.test(message)) return "API олдсонгүй. GitHub Pages биш Render/Node server линкээр орно уу.";
   if (/HTTP 401|HTTP 403|JWT|apikey|permission|permission denied|unauthorized/i.test(message)) return "Supabase key/эрхийн тохиргоо буруу байна.";
   if (/relation .* does not exist|app_state|table/i.test(message)) return "Supabase дээр app_state table үүсээгүй байна.";
+  if (/SUPABASE|Supabase/i.test(message) && /write failed|read failed/i.test(message)) return `Supabase хадгалалтын алдаа: ${message}`;
   if (/Failed to fetch|холбогдож чадсангүй|NetworkError/i.test(message)) return "Сервертэй холбогдож чадсангүй. Public server/API ажиллаж байгаа эсэхийг шалгана уу.";
   return message || "Хадгалалтын тодорхойгүй алдаа.";
+}
+
+function readableStoragePayloadMessage(payload, status) {
+  if (!payload || typeof payload !== "object") return `HTTP ${status}`;
+  const detail = stringifyErrorMessage(payload.detail);
+  const error = stringifyErrorMessage(payload.error);
+  const message = stringifyErrorMessage(payload.message);
+  const hint = stringifyErrorMessage(payload.hint);
+  const code = stringifyErrorMessage(payload.code);
+  const storage = stringifyErrorMessage(payload.storage);
+  const parts = [
+    error,
+    detail && detail !== error ? detail : "",
+    message,
+    hint ? `Hint: ${hint}` : "",
+    code ? `Code: ${code}` : "",
+    storage ? `Storage: ${storage}` : ""
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : `HTTP ${status}`;
+}
+
+function stringifyErrorMessage(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message || value.name || "Error";
+  if (typeof value === "object") {
+    const preferred = value.message || value.error || value.detail || value.hint || value.code;
+    if (preferred && preferred !== value) return stringifyErrorMessage(preferred);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+  return String(value);
 }
 
 async function manualSaveData() {
@@ -466,6 +513,17 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function adminEmailList(configuredAdminEmail = "") {
+  return [...new Set([defaultAdminEmail, normalizeEmail(configuredAdminEmail)].filter(Boolean))];
+}
+
+function isAdminEmail(email, access = {}) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  const configuredAdminEmail = typeof access === "string" ? access : access?.adminEmail;
+  return adminEmailList(configuredAdminEmail).includes(normalized);
+}
+
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
 }
@@ -474,7 +532,7 @@ function currentUser() {
   state.access = normalizeAccess(state.access);
   const email = state.access.currentEmail;
   if (!email) return { email: "", role: "guest", views: [], programs: [], label: "Нэвтрээгүй" };
-  if (email === state.access.adminEmail) {
+  if (isAdminEmail(email, state.access)) {
     return { email, role: "admin", views: managedViewDefinitions.map((view) => view.id), programs: programDefinitions.map((program) => program.id), label: "Admin" };
   }
   const savedUser = state.access.users.find((user) => user.email === email);
@@ -768,7 +826,7 @@ function renderAccessSettings() {
       </article>
     `;
   }).join("") : `<div class="empty-state">Одоогоор бүртгэсэн хэрэглэгч алга. Доорх формоор мэйл хаяг нэмнэ үү.</div>`;
-  summary.textContent = `Admin мэйл: ${state.access.adminEmail}. Бүртгэлтэй хэрэглэгч: ${users.length}. Бүртгэлгүй мэйлээр орсон хэрэглэгч зөвхөн viewer default эрхтэй байна.`;
+  summary.textContent = `Admin мэйл: ${state.access.adminEmail}. Нөөц admin: ${defaultAdminEmail}. Бүртгэлтэй хэрэглэгч: ${users.length}. Бүртгэлгүй мэйлээр орсон хэрэглэгч зөвхөн viewer default эрхтэй байна.`;
 }
 
 function saveAccessSettings(event) {
@@ -782,13 +840,13 @@ function saveAccessSettings(event) {
   }
   state.access.adminEmail = adminEmail;
   state.access.users = state.access.users
-    .filter((user) => user.email !== adminEmail)
+    .filter((user) => !isAdminEmail(user.email, { adminEmail }))
     .map((user) => ({
       ...user,
       views: $$(`input[data-user-view="${user.email}"]:checked`).map((input) => input.value),
       programs: $$(`input[data-user-program="${user.email}"]:checked`).map((input) => input.value)
     }));
-  if (wasAdmin) state.access.currentEmail = adminEmail;
+  if (wasAdmin && !isAdminEmail(state.access.currentEmail, { adminEmail })) state.access.currentEmail = adminEmail;
   persist("Мэйл хаягийн эрхийн тохиргоо хадгалагдлаа");
   applyAccessControl();
 }
@@ -805,7 +863,7 @@ function saveUserAccess(event) {
     showToast("Хэрэглэгчийн мэйл хаяг буруу байна");
     return;
   }
-  if (email === state.access.adminEmail) {
+  if (isAdminEmail(email, state.access)) {
     showToast("Admin мэйлд тусдаа хэрэглэгчийн эрх оноох шаардлагагүй");
     return;
   }
@@ -1121,58 +1179,339 @@ function handleTaskDialog(event) {
   renderDashboard();
 }
 
+function cleanCompetencyName(value) {
+  return String(value || "")
+    .replace(/^\s*(?:[\d০-৯]+[\).\-\s]*)+/u, "")
+    .replace(/^\s*[-–—•*,;:]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function surveyCompetencyKey(value) {
+  return normalizeKey(cleanCompetencyName(value));
+}
+
+function sourceFrequencyLabel(type, count) {
+  const labels = {
+    document: "Баримт бичиг",
+    focus: "Фокус бүлэг",
+    comparison: "Олон улсын харьцуулалт"
+  };
+  return `${labels[type] || type} ${count}×`;
+}
+
+function normalizeSurveyProgramIds(value) {
+  const ids = Array.isArray(value) ? value : value ? [value] : [];
+  return [...new Set(ids.filter((programId) => programDefinitions.some((program) => program.id === programId)))];
+}
+
+function mergeSurveyCompetency(merged, candidate) {
+  const name = cleanCompetencyName(candidate.name);
+  const key = surveyCompetencyKey(name || candidate.id);
+  if (!key) return;
+  const id = candidate.coreId || candidate.id || key;
+  const existing = merged.get(key) || {
+    id,
+    name,
+    detail: "",
+    source: candidate.source || "core",
+    sourceTypes: [],
+    sourceCounts: {},
+    sourceDetails: [],
+    programIds: [],
+    frequency: 0
+  };
+  existing.id = existing.id || id;
+  existing.name = existing.name || name;
+  existing.detail = existing.detail || candidate.detail || candidate.description || "";
+  const programIds = normalizeSurveyProgramIds(candidate.programIds || candidate.programId);
+  programIds.forEach((programId) => {
+    if (!existing.programIds.includes(programId)) existing.programIds.push(programId);
+  });
+  if (candidate.source && candidate.source !== "core" && !existing.sourceTypes.includes(candidate.source)) {
+    existing.sourceTypes.push(candidate.source);
+  }
+  if (candidate.source && candidate.source !== "core") {
+    const count = Number(candidate.count ?? candidate.documentCount ?? candidate.recordCount ?? 1) || 1;
+    existing.sourceCounts[candidate.source] = (existing.sourceCounts[candidate.source] || 0) + count;
+    existing.frequency += count;
+    if (candidate.detail) existing.sourceDetails.push(candidate.detail);
+  }
+  if (existing.sourceTypes.length) {
+    existing.source = existing.sourceTypes.includes("document") ? "document" : existing.sourceTypes[0];
+    existing.sourceLabel = existing.sourceTypes.map((type) => sourceFrequencyLabel(type, existing.sourceCounts[type] || 1)).join(" · ");
+    const sourceNames = existing.sourceTypes.map((type) => sourceFrequencyLabel(type, existing.sourceCounts[type] || 1)).join(" · ");
+    const detailParts = [
+      `Давтамж: ${existing.frequency}`,
+      `Эх үүсвэр: ${sourceNames}`,
+      ...existing.sourceDetails
+    ].filter(Boolean);
+    existing.detail = [...new Set(detailParts)].join(" · ");
+  }
+  merged.set(key, existing);
+}
+
+function aggregateFocusGapCompetencies() {
+  const aggregated = new Map();
+  state.focusGroups
+    .filter((item) => isProgramAllowed(focusProgramId(item)) && isAgencyAllowed(item.agency))
+    .forEach((item) => {
+      const programId = focusProgramId(item) || "other";
+      splitFocusGapItems(item.gaps).forEach((gap) => {
+        const name = cleanCompetencyName(gap);
+        const key = surveyCompetencyKey(name);
+        if (!key) return;
+        const id = `focus-${key}`;
+        if (!aggregated.has(id)) {
+          aggregated.set(id, {
+            id,
+            name,
+            description: "",
+            records: new Set(),
+            programs: new Set(),
+            programIds: new Set(),
+            agencies: new Set(),
+            count: 0
+          });
+        }
+        const summary = aggregated.get(id);
+        summary.count += 1;
+        summary.records.add(item.id);
+        if (programId) summary.programs.add(programLabel(programId) || programId);
+        if (programId && programId !== "other") summary.programIds.add(programId);
+        if (item.agency) summary.agencies.add(item.agency);
+      });
+    });
+
+  return [...aggregated.values()]
+    .map((item) => ({
+      ...item,
+      recordCount: item.records.size,
+      programNames: [...item.programs],
+      programIds: [...item.programIds],
+      agencies: [...item.agencies]
+    }))
+    .sort((left, right) => right.count - left.count || right.recordCount - left.recordCount || left.name.localeCompare(right.name, "mn"));
+}
+
+function aggregateComparisonCompetencies() {
+  const aggregated = new Map();
+  state.comparisons.forEach((item) => {
+    const programId = comparisonProgramId(item);
+    if (!programDefinitions.some((program) => program.id === programId)) return;
+    splitFocusGapItems(item.competencies).forEach((competency) => {
+      const name = cleanCompetencyName(competency);
+      const key = surveyCompetencyKey(name);
+      if (!key) return;
+      const id = `comparison-${key}`;
+      if (!aggregated.has(id)) {
+        aggregated.set(id, {
+          id,
+          name,
+          count: 0,
+          records: new Set(),
+          institutions: new Set(),
+          countries: new Set(),
+          programs: new Set(),
+          programIds: new Set()
+        });
+      }
+      const summary = aggregated.get(id);
+      summary.count += 1;
+      summary.records.add(item.id);
+      if (item.institution) summary.institutions.add(item.institution);
+      if (item.country) summary.countries.add(item.country);
+      summary.programIds.add(programId);
+      summary.programs.add(programLabel(programId));
+    });
+  });
+  return [...aggregated.values()]
+    .map((item) => ({
+      ...item,
+      recordCount: item.records.size,
+      institutions: [...item.institutions],
+      countries: [...item.countries],
+      programNames: [...item.programs],
+      programIds: [...item.programIds]
+    }))
+    .sort((left, right) => right.count - left.count || right.recordCount - left.recordCount || left.name.localeCompare(right.name, "mn"));
+}
+
 function surveyCompetencies() {
   const merged = new Map();
   competencies.forEach((item) => {
-    merged.set(item.id, { ...item, source: "core", sourceLabel: "Үндсэн жагсаалт" });
+    mergeSurveyCompetency(merged, { ...item, coreId: item.id, source: "core", sourceLabel: "Үндсэн жагсаалт" });
   });
 
   aggregateDocumentCompetencies().forEach((item) => {
-    const id = item.id || normalizeKey(item.name);
-    const existing = merged.get(id);
     const detail = item.description || `${item.documentCount} баримт · ${item.agencyCount} байгууллагын нотолгоо`;
-    if (existing) {
-      merged.set(id, {
-        ...existing,
-        detail: existing.detail || detail,
-        source: "core-document",
-        sourceLabel: `Баримтаар баталгаажсан · ${item.documentCount}×`,
-        documentCount: item.documentCount,
-        agencyCount: item.agencyCount
-      });
-      return;
-    }
-    merged.set(id, {
-      id,
+    mergeSurveyCompetency(merged, {
+      id: item.id || `document-${surveyCompetencyKey(item.name)}`,
       name: item.name,
       detail,
       source: "document",
-      sourceLabel: `Баримтаас автоматаар нэмсэн · ${item.documentCount}×`,
+      count: item.documentCount,
       documentCount: item.documentCount,
-      agencyCount: item.agencyCount
+      agencyCount: item.agencyCount,
+      programIds: item.programIds
     });
   });
 
-  return [...merged.values()];
+  aggregateFocusGapCompetencies().forEach((item) => {
+    const programText = item.programNames.join(", ") || "Хөтөлбөр тодорхойгүй";
+    const agencyText = item.agencies.join(", ") || "Байгууллага тодорхойгүй";
+    const detail = `${item.count} удаа дурдсан · ${item.recordCount} фокус бүлэг · ${programText} · ${agencyText}`;
+    mergeSurveyCompetency(merged, {
+      id: item.id,
+      name: item.name,
+      detail,
+      source: "focus",
+      count: item.count,
+      focusCount: item.count,
+      focusRecordCount: item.recordCount,
+      programIds: item.programIds
+    });
+  });
+
+  aggregateComparisonCompetencies().forEach((item) => {
+    const countryText = item.countries.join(", ") || "Улс тодорхойгүй";
+    const institutionText = item.institutions.join(", ") || "Байгууллага тодорхойгүй";
+    const programText = item.programNames.join(", ") || "Хөтөлбөр тодорхойгүй";
+    const detail = `${item.count} удаа дурдсан · ${item.recordCount} харьцуулсан хөтөлбөр · ${programText} · ${countryText} · ${institutionText}`;
+    mergeSurveyCompetency(merged, {
+      id: item.id,
+      name: item.name,
+      detail,
+      source: "comparison",
+      count: item.count,
+      comparisonCount: item.count,
+      comparisonRecordCount: item.recordCount,
+      programIds: item.programIds
+    });
+  });
+
+  return [...merged.values()].sort((left, right) => {
+    const leftDerived = left.sourceTypes?.length ? 1 : 0;
+    const rightDerived = right.sourceTypes?.length ? 1 : 0;
+    return rightDerived - leftDerived || (right.frequency || 0) - (left.frequency || 0) || left.name.localeCompare(right.name, "mn");
+  });
+}
+
+function renderSurveySourceFilters(items) {
+  const buttons = $$("[data-survey-source]");
+  if (!buttons.length) return;
+  const counts = {
+    all: items.length,
+    document: items.filter((item) => item.sourceTypes?.includes("document")).length,
+    focus: items.filter((item) => item.sourceTypes?.includes("focus")).length,
+    comparison: items.filter((item) => item.sourceTypes?.includes("comparison")).length
+  };
+  const labels = {
+    all: "Бүгд",
+    document: "Баримт бичгийн шинжилгээ",
+    focus: "Фокус бүлэг",
+    comparison: "Олон улсын харьцуулалт"
+  };
+  buttons.forEach((button) => {
+    const source = button.dataset.surveySource || "all";
+    button.classList.toggle("active", source === selectedSurveySourceFilter);
+    button.disabled = source !== "all" && !counts[source];
+    button.innerHTML = `${labels[source] || source} <span>${counts[source] || 0}</span>`;
+  });
+}
+
+function itemMatchesSurveySource(item) {
+  return selectedSurveySourceFilter === "all" || item.sourceTypes?.includes(selectedSurveySourceFilter);
+}
+
+function itemMatchesSurveyProgram(item, programId = selectedSurveyProgramFilter) {
+  if (programId === "all") return true;
+  if (!isProgramAllowed(programId)) return false;
+  const ids = normalizeSurveyProgramIds(item.programIds);
+  return ids.length === 0 || ids.includes(programId);
+}
+
+function renderSurveyProgramFilters(items) {
+  const buttons = $$("[data-survey-program]");
+  if (!buttons.length) return;
+  const sourceFilteredItems = items.filter(itemMatchesSurveySource);
+  const allowedPrograms = new Set(allowedProgramIds());
+  buttons.forEach((button) => {
+    const programId = button.dataset.surveyProgram || "all";
+    const allowed = programId === "all" || allowedPrograms.has(programId);
+    const count = programId === "all"
+      ? sourceFilteredItems.length
+      : sourceFilteredItems.filter((item) => itemMatchesSurveyProgram(item, programId)).length;
+    button.hidden = !allowed;
+    button.disabled = allowed && programId !== "all" && count === 0;
+    button.classList.toggle("active", programId === selectedSurveyProgramFilter);
+    const label = programId === "all" ? "Бүх хөтөлбөр" : programLabel(programId);
+    button.innerHTML = `${label} <span>${count}</span>`;
+  });
+}
+
+function captureSurveyDraftRatings() {
+  $$("#competency-table input[type='radio']:checked").forEach((input) => {
+    surveyDraftRatings[input.name] = input.value;
+  });
+}
+
+function restoreSurveyDraftRatings() {
+  Object.entries(surveyDraftRatings).forEach(([name, value]) => {
+    const input = $(`#competency-table input[name="${CSS.escape(name)}"][value="${CSS.escape(value)}"]`);
+    if (input) input.checked = true;
+  });
+}
+
+function appendCompetencyRow(table, item) {
+  const row = document.createElement("div");
+  row.className = `competency-row ${item.source !== "core" ? "document-derived" : ""}`;
+  row.innerHTML = `
+    <div class="competency-name">
+      <strong>${escapeHtml(item.name)}</strong>
+      <small>${escapeHtml(item.detail || "")}</small>
+      ${item.source !== "core" ? `<em>${escapeHtml(item.sourceLabel)}</em>` : ""}
+    </div>
+    ${ratingGroup(`${item.id}_current`, "current")}
+    ${ratingGroup(`${item.id}_importance`, "importance")}`;
+  table.appendChild(row);
+}
+
+function appendCompetencyGroup(table, title, items) {
+  if (!items.length) return;
+  const group = document.createElement("div");
+  group.className = "competency-group-row";
+  group.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${items.length} чадамж</span>`;
+  table.appendChild(group);
+  items.forEach((item) => appendCompetencyRow(table, item));
 }
 
 function buildCompetencyTable() {
+  captureSurveyDraftRatings();
   const table = $("#competency-table");
   table.innerHTML = `<div class="competency-head"><span>Чадамж</span><span>Одоогийн түвшин</span><span>Ирээдүйн чухалчлал</span></div>`;
-  const items = surveyCompetencies();
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = `competency-row ${item.source === "document" ? "document-derived" : ""}`;
-    row.innerHTML = `
-      <div class="competency-name">
-        <strong>${escapeHtml(item.name)}</strong>
-        <small>${escapeHtml(item.detail || "")}</small>
-        ${item.source !== "core" ? `<em>${escapeHtml(item.sourceLabel)}</em>` : ""}
-      </div>
-      ${ratingGroup(`${item.id}_current`, "current")}
-      ${ratingGroup(`${item.id}_importance`, "importance")}`;
-    table.appendChild(row);
-  });
+  const allItems = surveyCompetencies();
+  renderSurveySourceFilters(allItems);
+  renderSurveyProgramFilters(allItems);
+  const items = allItems
+    .filter(itemMatchesSurveySource)
+    .filter((item) => itemMatchesSurveyProgram(item));
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "competency-empty";
+    empty.textContent = "Энэ шүүлтүүрээр харуулах чадамж хараахан алга.";
+    table.appendChild(empty);
+    return;
+  }
+  if (selectedSurveyProgramFilter === "all") {
+    appendCompetencyGroup(table, "Нийтлэг чадамж", items.filter((item) => !normalizeSurveyProgramIds(item.programIds).length));
+    accessibleProgramDefinitions().forEach((program) => {
+      appendCompetencyGroup(table, program.name, items.filter((item) => normalizeSurveyProgramIds(item.programIds).includes(program.id)));
+    });
+  } else {
+    appendCompetencyGroup(table, programLabel(selectedSurveyProgramFilter), items);
+  }
+  restoreSurveyDraftRatings();
 }
 
 function ratingGroup(name, className) {
@@ -1199,13 +1538,14 @@ function handleSurvey(event) {
   };
   surveyCompetencies().forEach((item) => {
     response.ratings[item.id] = {
-      current: parseRating(data.get(`${item.id}_current`)),
-      importance: parseRating(data.get(`${item.id}_importance`))
+      current: parseRating(data.get(`${item.id}_current`) ?? surveyDraftRatings[`${item.id}_current`]),
+      importance: parseRating(data.get(`${item.id}_importance`) ?? surveyDraftRatings[`${item.id}_importance`])
     };
   });
   state.surveys.push(response);
   persist("Асуулгын хариулт бүртгэгдлээ");
   form.reset();
+  surveyDraftRatings = {};
   $("#survey-error").textContent = "";
   $("#survey-success").hidden = false;
   renderDashboard();
@@ -1255,6 +1595,8 @@ function clearAutoFilledMetadata(form) {
     field.value = "";
     field.classList.remove("auto-filled");
     delete field.dataset.autoFilled;
+    delete field.dataset.sourceSnippet;
+    delete field.dataset.sourcePage;
     delete field.title;
   });
 }
@@ -1284,6 +1626,594 @@ function applyInferredMetadata(form, metadata) {
     applied.push(label);
   });
   return applied;
+}
+
+function firstMatch(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1] || match?.[0]) return (match[1] || match[0]).replace(/\s+/g, " ").trim();
+  }
+  return "";
+}
+
+function firstMatchWithPattern(text, patterns) {
+  for (const item of patterns) {
+    const pattern = item.pattern || item;
+    const match = text.match(pattern);
+    if (match?.[1] || match?.[0]) {
+      return {
+        value: (match[1] || match[0]).replace(/\s+/g, " ").trim(),
+        label: item.label || "pattern",
+        strict: item.strict !== false
+      };
+    }
+  }
+  return { value: "", label: "", strict: false };
+}
+
+function cleanComparisonValue(value, maxLength = 140) {
+  const clean = String(value || "").replace(/\s+/g, " ").replace(/^[\s:;,.–—-]+|[\s:;,.–—-]+$/g, "").trim();
+  if (clean.length <= maxLength) return clean;
+  const clipped = clean.slice(0, maxLength + 1);
+  const wordSafe = clipped.replace(/\s+\S*$/, "").trim();
+  return (wordSafe || clean.slice(0, maxLength)).replace(/[,:;–—-]+$/, "").trim();
+}
+
+function firstCompleteClause(value, maxLength = 120) {
+  const clean = String(value || "")
+    .replace(/\[\[PAGE\s+\d+\]\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return "";
+  const stopMatch = clean.match(/\b(?:This is|It is|These are|The programme is|The program is|Admission|Applicants|Prerequisite)\b/i);
+  const firstPart = stopMatch ? clean.slice(0, stopMatch.index).trim() : clean;
+  const clauses = firstPart
+    .split(/\s*(?:[.;!?]| — | – | \| )\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const selected = clauses.find((part) => part.length >= 3) || firstPart;
+  return cleanComparisonValue(selected, maxLength);
+}
+
+function normalizeComparisonProgramTitle(value, fileBase = "") {
+  const raw = firstCompleteClause(value, 170)
+    .replace(/\btraining and serving\b.*$/i, "training")
+    .replace(/\bserving\b.*$/i, "")
+    .replace(/\b\d+(?:[–-]\d+)?\s*(?:years?|semesters?|months?|weeks?|жил|семестр|сар|долоо хоног)\b.*$/i, "")
+    .replace(/\b(?:in this level|at this level|for this level)\b.*$/i, "")
+    .trim();
+  let title = translateProgramName(raw)
+    .replace(/\btraining\b/gi, "сургалт")
+    .replace(/Удирдлага\s+сургалт/gi, "Удирдлагын сургалт")
+    .replace(/Манлайлал\s+сургалт/gi, "Манлайллын сургалт")
+    .replace(/\s+/g, " ")
+    .trim();
+  const fallback = cleanComparisonValue(fileBase.replace(/\b(pdf|docx?|txt)\b/gi, ""), 140);
+  if ((!title || /^\d+$/.test(title)) && fallback && !/^\d+$/.test(fallback)) title = fallback;
+  return cleanComparisonValue(title, 120);
+}
+
+function normalizeDurationPhrase(value) {
+  const clean = String(value || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const numberWords = {
+    one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
+    eleven: "11", twelve: "12"
+  };
+  const match = clean.match(/\b(\d+(?:\.\d+)?(?:\s*[–-]\s*\d+(?:\.\d+)?)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(years?|semesters?|months?|weeks?|жил|семестр|сар|долоо хоног)\b/i);
+  if (match) {
+    const number = numberWords[match[1].toLowerCase()] || match[1].replace(/\s*[–-]\s*/g, "–");
+    const unit = match[2].toLowerCase();
+    const translatedUnit = /year|жил/.test(unit) ? "жил"
+      : /semester|семестр/.test(unit) ? "семестр"
+      : /month|сар/.test(unit) ? "сар"
+      : "долоо хоног";
+    return `${number} ${translatedUnit}`;
+  }
+  return firstCompleteClause(clean, 80)
+    .replace(/\byears?\b/gi, "жил")
+    .replace(/\bsemesters?\b/gi, "семестр")
+    .replace(/\bmonths?\b/gi, "сар")
+    .replace(/\bweeks?\b/gi, "долоо хоног");
+}
+
+function snippetAround(text, queryOrPattern, fallbackPatterns = []) {
+  const source = String(text || "");
+  const patterns = [
+    queryOrPattern instanceof RegExp ? queryOrPattern : null,
+    ...fallbackPatterns
+  ].filter(Boolean);
+  let index = -1;
+  let value = "";
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) {
+      index = match.index ?? -1;
+      value = (match[1] || match[0] || "").replace(/\s+/g, " ").trim();
+      break;
+    }
+  }
+  if (index < 0 && queryOrPattern && !(queryOrPattern instanceof RegExp)) {
+    index = source.toLowerCase().indexOf(String(queryOrPattern).toLowerCase().slice(0, 60));
+    value = String(queryOrPattern);
+  }
+  if (index < 0) return null;
+  const start = Math.max(0, index - 160);
+  const end = Math.min(source.length, index + Math.max(220, value.length + 160));
+  const before = source.slice(0, index);
+  const pageMatches = [...before.matchAll(/\[\[PAGE\s+(\d+)\]\]/g)];
+  const page = pageMatches.length ? pageMatches.at(-1)[1] : "";
+  return {
+    page,
+    text: source.slice(start, end).replace(/\[\[PAGE\s+\d+\]\]/g, "").replace(/\s+/g, " ").trim()
+  };
+}
+
+function sourceEvidenceLabel(evidence) {
+  if (!evidence?.text) return "";
+  return `${evidence.page ? `Хуудас ${evidence.page} · ` : ""}${evidence.text}`;
+}
+
+function comparisonFieldEvidence(normalized, match, fallbackPatterns = []) {
+  if (!match?.value) return null;
+  const evidence = snippetAround(normalized, match.value, fallbackPatterns);
+  return evidence ? { ...evidence, strict: Boolean(match.strict), label: match.label || "" } : null;
+}
+
+function looksLikeMixedProgramTitle(value = "") {
+  const text = String(value || "").toLowerCase();
+  if (!text.trim()) return true;
+  return text.length > 130
+    || /main subjects?|admission|applicants?|this is accepted|semester\s*;|\bpage\b|professional development|training and serving/i.test(text);
+}
+
+function comparisonExtractionQuality(metadata) {
+  const evidence = metadata.sourceEvidence || {};
+  const strictFields = ["country", "institution", "program", "credits", "format", "duration", "teacherRequirements"]
+    .filter((field) => metadata[field] && evidence[field]?.strict);
+  const presentFields = ["country", "institution", "program", "credits", "format", "duration"]
+    .filter((field) => metadata[field]);
+  const hasCore = Boolean(metadata.program && (metadata.country || metadata.institution));
+  const hasStudyData = Boolean(metadata.credits || metadata.duration || metadata.format);
+  const mixedTitle = looksLikeMixedProgramTitle(metadata.program);
+  const score = strictFields.length + (hasCore ? 1 : 0) + (hasStudyData ? 1 : 0) - (mixedTitle ? 2 : 0);
+  return {
+    score,
+    strictFields,
+    presentFields,
+    mixedTitle,
+    trusted: score >= 4 && hasCore && hasStudyData && !mixedTitle
+  };
+}
+
+function inferInternationalProgramMetadata({ text, fileName = "" } = {}) {
+  const normalized = String(text || "").replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const fileBase = fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+  const countryMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Country|Location|Campus)\s*[:\-]\s*([A-Z][A-Za-z .,&-]{2,80})/i, label: "country-label" },
+    { pattern: /\b(United States|United Kingdom|Australia|Canada|Singapore|Germany|Finland|Netherlands|New Zealand|Japan|Korea|Norway|Sweden|Estonia|Germany|Austria|Croatia)\b/i, label: "known-country", strict: false }
+  ]);
+  const institutionMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Institution|University|School|College|Institute|Academy|Agency|Provider)\s*[:\-]\s*([^\n]{4,110})/i, label: "institution-label" },
+    { pattern: /\b([A-Z][A-Za-z .,&-]{2,90}\s+(?:University|School|College|Institute|Academy|Agency))\b/, label: "institution-name", strict: false }
+  ]);
+  const programMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Program(?:me)? title|Program(?:me)? name|Degree|Course title|Qualification)\s*[:\-]\s*([^\n]{6,120})/i, label: "program-label" },
+    { pattern: /\b((?:Master|MSc|MA|MPA|MBA|Graduate Certificate|Postgraduate Diploma)\s+(?:of|in)?[^\n.;]{6,110})/i, label: "degree-title", strict: false }
+  ]);
+  const creditsMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Credits|Credit points|ECTS)\s*[:\-]\s*(\d{2,3}[^\n]{0,20})/i, label: "credits-label" },
+    { pattern: /\b(\d{2,3}\s*(?:ECTS|credits|credit points|units))\b/i, label: "credits-value" }
+  ]);
+  const formatMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Mode of study|Study mode|Delivery|Format)\s*[:\-]\s*([^\n]{4,80})/i, label: "format-label" },
+    { pattern: /\b(full-time|part-time|online|on campus|blended|hybrid|distance learning)\b/i, label: "format-value", strict: false }
+  ]);
+  const durationMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Duration|Length|Programme duration|Program duration|Study duration)\s*[:\-]\s*([^\n]{3,80})/i, label: "duration-label" },
+    { pattern: /\b(\d+(?:\.\d+)?(?:\s*[–-]\s*\d+(?:\.\d+)?)?\s*(?:year|years|semester|semesters|month|months|week|weeks))\b/i, label: "duration-value", strict: false },
+    { pattern: /\b((?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:year|years|semester|semesters|month|months|week|weeks))\b/i, label: "duration-word", strict: false }
+  ]);
+  const teacherRequirementsMatch = firstMatchWithPattern(normalized, [
+    { pattern: /\b(?:Faculty|Teaching staff|Instructors|Lecturers|Teacher requirements|Staff requirements)\s*[:\-]\s*([^\n]{8,180})/i, label: "teacher-label" }
+  ]);
+  const country = countryMatch.value;
+  const institution = institutionMatch.value;
+  const program = programMatch.value;
+  const credits = creditsMatch.value;
+  const format = formatMatch.value;
+  const duration = durationMatch.value;
+  const teacherRequirements = teacherRequirementsMatch.value;
+  const sourceEvidence = {
+    country: comparisonFieldEvidence(normalized, countryMatch, [/\b(?:Country|Location|Campus)\s*[:\-]\s*([^\n]{2,100})/i]),
+    institution: comparisonFieldEvidence(normalized, institutionMatch, [/\b(?:Institution|University|School|College|Institute|Academy|Agency|Provider)\s*[:\-]\s*([^\n]{4,140})/i]),
+    program: comparisonFieldEvidence(normalized, programMatch, [/\b(?:Program(?:me)? title|Program(?:me)? name|Degree|Course title|Qualification)\s*[:\-]\s*([^\n]{6,140})/i]),
+    credits: comparisonFieldEvidence(normalized, creditsMatch, [/\b(?:Credits|Credit points|ECTS)\s*[:\-]\s*(\d{2,3}[^\n]{0,20})/i]),
+    format: comparisonFieldEvidence(normalized, formatMatch, [/\b(?:Mode of study|Study mode|Delivery|Format)\s*[:\-]\s*([^\n]{4,100})/i]),
+    duration: comparisonFieldEvidence(normalized, durationMatch, [/\b(?:Duration|Length|Programme duration|Program duration|Study duration)\s*[:\-]\s*([^\n]{3,100})/i]),
+    teacherRequirements: comparisonFieldEvidence(normalized, teacherRequirementsMatch, [/\b(?:Faculty|Teaching staff|Instructors|Lecturers|Teacher requirements|Staff requirements)\s*[:\-]\s*([^\n]{8,220})/i]),
+    competencies: snippetAround(normalized, /(?:learning outcomes|competenc(?:y|ies)|graduate attributes|graduates? will|students? will)[^\n]{20,260}/i)
+  };
+  const metadata = {
+    programId: inferComparisonProgramId(normalized),
+    country: translateCountry(country),
+    institution: cleanComparisonValue(institution),
+    program: normalizeComparisonProgramTitle(program, ""),
+    credits: cleanComparisonValue(credits, 60),
+    format: translateFormat(format),
+    duration: normalizeDurationPhrase(duration),
+    teacherRequirements: translateTeacherRequirements(teacherRequirements),
+    competencies: inferComparisonCompetencies(normalized),
+    sourceEvidence
+  };
+  metadata.extractionQuality = comparisonExtractionQuality(metadata);
+  return metadata;
+}
+
+function inferComparisonProgramId(text = "") {
+  const lower = String(text || "").toLocaleLowerCase("mn");
+  if (/(цагдаа|хууль сахиулах|нийтийн аюулгүй|police|law enforcement|criminal justice|public safety|calea|cepol)/i.test(lower)) return "police";
+  if (/(хил|гааль|цагаачлал|border|customs|immigration|frontier)/i.test(lower)) return "border";
+  if (/(шүүх|шийдвэр гүйцэтгэх|хорих|засан хүмүүжүүлэх|correction|prison|probation|penitentiary|court enforcement)/i.test(lower)) return "corrections";
+  if (/(онцгой|гамшиг|хямрал|гал түймэр|emergency|disaster|resilience|crisis|fire service|civil protection)/i.test(lower)) return "emergency";
+  return "all";
+}
+
+function splitInternationalProgramBlocks(text = "", fileName = "") {
+  const normalized = String(text || "").replace(/\r/g, "\n").replace(/[ \t]+/g, " ");
+  const compact = normalized.replace(/\n{3,}/g, "\n\n");
+  const creditMatches = [...compact.matchAll(/\b\d{2,3}\s*(?:ECTS|credits|credit points|units)\b/gi)];
+  const blocks = [];
+  creditMatches.forEach((match) => {
+    const start = Math.max(0, match.index - 1300);
+    const end = Math.min(compact.length, match.index + 1900);
+    blocks.push(compact.slice(start, end));
+  });
+  if (!blocks.length) {
+    const sections = compact
+      .split(/\n\s*\n|(?=\b(?:Program(?:me)?|Master|MSc|MA|Course|Degree|Qualification)\b)/i)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 180);
+    blocks.push(...sections.slice(0, 12));
+  }
+  if (!blocks.length) blocks.push(compact.slice(0, 5000));
+  const seen = new Set();
+  const inferred = blocks
+    .map((block) => inferInternationalProgramMetadata({ text: block, fileName }))
+    .filter((item) => item.extractionQuality?.trusted)
+    .filter((item) => {
+      const key = normalizeKey(`${item.country}-${item.institution}-${item.program}-${item.credits}`);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+  comparisonRejectedSuggestions = Math.max(0, blocks.length - inferred.length);
+  return inferred;
+}
+
+function translateCountry(value) {
+  const country = cleanComparisonValue(value);
+  const map = {
+    "United States": "АНУ",
+    "United Kingdom": "Их Британи",
+    Australia: "Австрали",
+    Canada: "Канад",
+    Singapore: "Сингапур",
+    Germany: "Герман",
+    Finland: "Финланд",
+    Netherlands: "Нидерланд",
+    "New Zealand": "Шинэ Зеланд",
+    Japan: "Япон",
+    Korea: "БНСУ",
+    Norway: "Норвеги",
+    Sweden: "Швед",
+    Estonia: "Эстони"
+  };
+  return map[country] || country;
+}
+
+function translateProgramName(value) {
+  return cleanComparisonValue(value, 140)
+    .replace(/\bMaster of\b/gi, "Магистрын хөтөлбөр:")
+    .replace(/\bMSc in\b/gi, "Шинжлэх ухааны магистрын хөтөлбөр:")
+    .replace(/\bMA in\b/gi, "Магистрын хөтөлбөр:")
+    .replace(/\bPublic Administration\b/gi, "Төрийн удирдлага")
+    .replace(/\bStrategic Leadership\b/gi, "Стратегийн манлайлал")
+    .replace(/\bLeadership\b/gi, "Манлайлал")
+    .replace(/\bSecurity\b/gi, "Аюулгүй байдал")
+    .replace(/\bCriminal Justice\b/gi, "Эрүүгийн эрх зүй, хууль сахиулах")
+    .replace(/\bManagement\b/gi, "Удирдлага");
+}
+
+function translateFormat(value) {
+  const format = cleanComparisonValue(value);
+  const lower = format.toLowerCase();
+  const parts = [];
+  if (lower.includes("full-time")) parts.push("Бүтэн цагийн");
+  if (lower.includes("part-time")) parts.push("Хагас цагийн");
+  if (lower.includes("online")) parts.push("Цахим");
+  if (lower.includes("campus")) parts.push("Танхим");
+  if (lower.includes("blend") || lower.includes("hybrid")) parts.push("Хосолсон");
+  if (lower.includes("distance")) parts.push("Зайны");
+  return parts.length ? [...new Set(parts)].join(", ") : format;
+}
+
+function translateDuration(value) {
+  return normalizeDurationPhrase(value)
+    .replace(/\byears?\b/gi, "жил")
+    .replace(/\bsemesters?\b/gi, "семестр")
+    .replace(/\bmonths?\b/gi, "сар")
+    .replace(/\bweeks?\b/gi, "долоо хоног")
+    .replace(/\bfull-time\b/gi, "бүтэн цагийн")
+    .replace(/\bpart-time\b/gi, "хагас цагийн");
+}
+
+function translateTeacherRequirements(value) {
+  const clean = firstCompleteClause(value, 135)
+    .replace(/\band\s+/gi, ", ")
+    .replace(/\s*,\s*,\s*/g, ", ")
+    .replace(/\(\s*/g, "(")
+    .replace(/\s*\)/g, ")")
+    .replace(/\bPhD\b/gi, "PhD")
+    .replace(/\bdoctorate|doctoral degree\b/gi, "докторын зэрэг")
+    .replace(/\bprofessor\b/gi, "профессор")
+    .replace(/\blecturers?\b/gi, "багш/лектор")
+    .replace(/\binstructors?\b/gi, "сургагч багш")
+    .replace(/\bnon-staff\b/gi, "орон тооны бус")
+    .replace(/\bfrom the police department\b/gi, "цагдаагийн байгууллагаас")
+    .replace(/\bsupport specialists?\b/gi, "дэмжих мэргэжилтэн")
+    .replace(/\bprofessional experience\b/gi, "мэргэжлийн туршлага")
+    .replace(/\bpractitioners?\b/gi, "салбарын практик туршлагатай мэргэжилтэн")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleanComparisonValue(clean, 125);
+}
+
+function inferComparisonCompetencies(text) {
+  const lower = String(text || "").toLowerCase();
+  const patterns = [
+    { name: "Стратегийн сэтгэлгээ ба орчны шинжилгээ", terms: ["strategic thinking", "strategy", "strategic analysis", "systems thinking", "environmental scanning"] },
+    { name: "Нотолгоонд суурилсан шийдвэр гаргалт", terms: ["evidence-based", "data analysis", "analytics", "research methods", "decision making"] },
+    { name: "Бодлогын шинжилгээ ба эрх зүйн нийцэл", terms: ["policy analysis", "public policy", "legal", "regulation", "governance"] },
+    { name: "Эрсдэл, хямрал ба аюулгүй байдлын удирдлага", terms: ["risk management", "crisis", "emergency", "security management", "resilience"] },
+    { name: "Ёс зүй, хариуцлага ба олон нийтийн итгэл", terms: ["ethics", "accountability", "integrity", "public trust", "transparency"] },
+    { name: "Хүмүүс ба байгууллагын өөрчлөлтийг удирдах", terms: ["change management", "people management", "organizational development", "human resource", "talent"] },
+    { name: "Харилцаа, хэлэлцээ ба оролцогч талын хамтын ажиллагаа", terms: ["communication", "negotiation", "stakeholder", "collaboration", "partnership"] },
+    { name: "Дижитал шилжилт ба технологийн удирдлага", terms: ["digital", "technology", "cyber", "artificial intelligence", "information systems"] },
+    { name: "Гүйцэтгэл, төсөл ба нөөцийн удирдлага", terms: ["performance management", "project management", "budget", "resource management", "evaluation"] }
+  ];
+  const found = patterns
+    .map((item) => ({ ...item, count: item.terms.reduce((sum, term) => sum + (lower.includes(term) ? 1 : 0), 0) }))
+    .filter((item) => item.count > 0)
+    .sort((left, right) => right.count - left.count)
+    .map((item) => item.name);
+  return [...new Set(found)].slice(0, 12).join("\n");
+}
+
+function applyComparisonMetadata(form, metadata) {
+  const fields = [
+    { name: "programId", value: metadata.programId, label: "хамааруулах хөтөлбөр" },
+    { name: "country", value: metadata.country, label: "улс" },
+    { name: "institution", value: metadata.institution, label: "сургууль / агентлаг" },
+    { name: "program", value: metadata.program, label: "хөтөлбөрийн нэр" },
+    { name: "credits", value: metadata.credits, label: "нийт кредит" },
+    { name: "format", value: metadata.format, label: "сургалтын хэлбэр" },
+    { name: "duration", value: metadata.duration, label: "суралцах хугацаа" },
+    { name: "teacherRequirements", value: metadata.teacherRequirements, label: "багшийн шаардлага" },
+    { name: "competencies", value: metadata.competencies, label: "төгсөгчийн гол чадамж" }
+  ];
+  const applied = [];
+  fields.forEach(({ name, value, label }) => {
+    const field = form.elements[name];
+    if (!field || !value || String(field.value).trim()) return;
+    field.value = value;
+    field.classList.add("auto-filled");
+    field.dataset.autoFilled = "true";
+    field.title = "Эх файлаас автоматаар санал болгосон. Эх лавлагаагүй бол ашиглахгүй; заавал тулган баталгаажуулна.";
+    const evidence = metadata.sourceEvidence?.[name];
+    if (evidence?.text) {
+      field.dataset.sourceSnippet = evidence.text;
+      field.dataset.sourcePage = evidence.page || "";
+    }
+    applied.push(label);
+  });
+  comparisonFormEvidence = metadata.sourceEvidence || {};
+  return applied;
+}
+
+function comparisonContextFromForm(form = $("#comparison-form")) {
+  if (!form) {
+    return { localProgramName: "", localProgramLevel: "", localProgramLevelLabel: "", localProgramTargetGroup: "" };
+  }
+  const levelField = form.elements.localProgramLevel;
+  return {
+    localProgramName: cleanComparisonValue(form.elements.localProgramName?.value, 300),
+    localProgramLevel: cleanComparisonValue(levelField?.value, 60),
+    localProgramLevelLabel: levelField?.selectedOptions?.[0]?.textContent?.trim() || "",
+    localProgramTargetGroup: cleanComparisonValue(form.elements.localProgramTargetGroup?.value, 500)
+  };
+}
+
+function inferLocalComparisonProgramId(context = comparisonContextFromForm()) {
+  return inferComparisonProgramId(`${context.localProgramName || ""} ${context.localProgramTargetGroup || ""}`);
+}
+
+function syncComparisonProgramFromContext() {
+  const form = $("#comparison-form");
+  const field = form?.elements.programId;
+  if (!field) return;
+  const inferred = inferLocalComparisonProgramId();
+  if (inferred === "all") return;
+  if (field.value === "all" || field.dataset.autoContextProgram === "true") {
+    field.value = inferred;
+    field.dataset.autoContextProgram = "true";
+  }
+}
+
+function validateComparisonContext() {
+  const form = $("#comparison-form");
+  const fields = [
+    { field: form?.elements.localProgramName, message: "Эхлээд сургалтын хөтөлбөрийн нэрийг оруулна уу." },
+    { field: form?.elements.localProgramLevel, message: "Эхлээд сургалтын хөтөлбөрийн түвшинг сонгоно уу." },
+    { field: form?.elements.localProgramTargetGroup, message: "Эхлээд сургалтын хөтөлбөрийн зорилтот бүлгийг оруулна уу." }
+  ];
+  const missing = fields.find((item) => !String(item.field?.value || "").trim());
+  if (!missing) return true;
+  missing.field?.focus();
+  showToast(missing.message);
+  return false;
+}
+
+function comparisonMetadataPayload(metadata) {
+  const context = comparisonContextFromForm();
+  const selectedProgramId = $("#comparison-form")?.elements.programId?.value || "";
+  return {
+    programId: selectedProgramId && selectedProgramId !== "all" ? selectedProgramId : metadata.programId || inferLocalComparisonProgramId(context) || "all",
+    localProgramName: cleanComparisonValue(metadata.localProgramName || context.localProgramName, 300),
+    localProgramLevel: cleanComparisonValue(metadata.localProgramLevel || context.localProgramLevel, 60),
+    localProgramLevelLabel: cleanComparisonValue(metadata.localProgramLevelLabel || context.localProgramLevelLabel, 120),
+    localProgramTargetGroup: cleanComparisonValue(metadata.localProgramTargetGroup || context.localProgramTargetGroup, 500),
+    country: cleanComparisonValue(metadata.country),
+    institution: cleanComparisonValue(metadata.institution),
+    program: cleanComparisonValue(metadata.program, 180),
+    credits: cleanComparisonValue(metadata.credits, 80),
+    format: cleanComparisonValue(metadata.format, 100),
+    duration: cleanComparisonValue(metadata.duration, 100),
+    teacherRequirements: cleanComparisonValue(metadata.teacherRequirements, 180),
+    url: cleanComparisonValue(metadata.url, 240),
+    competencies: String(metadata.competencies || "").trim(),
+    sourceEvidence: metadata.sourceEvidence || comparisonFormEvidence || {}
+  };
+}
+
+function fillComparisonForm(metadata) {
+  const form = $("#comparison-form");
+  const payload = comparisonMetadataPayload(metadata);
+  Object.entries(payload).forEach(([name, value]) => {
+    const field = form.elements[name];
+    if (field && name !== "sourceEvidence") field.value = value || (name === "programId" ? "all" : "");
+  });
+  comparisonFormEvidence = metadata.sourceEvidence || {};
+  applyComparisonFieldEvidence(form, comparisonFormEvidence);
+}
+
+function applyComparisonFieldEvidence(form, evidenceMap = {}) {
+  Object.entries(evidenceMap).forEach(([name, evidence]) => {
+    const field = form.elements[name];
+    if (!field || !evidence?.text) return;
+    field.dataset.sourceSnippet = evidence.text;
+    field.dataset.sourcePage = evidence.page || "";
+    field.dataset.autoFilled = "true";
+    field.classList.add("auto-filled");
+  });
+}
+
+function showComparisonFieldEvidence(field) {
+  const status = $("#comparison-file-status");
+  if (!status || !field?.dataset?.sourceSnippet) return;
+  status.hidden = false;
+  status.classList.add("autofill");
+  status.classList.remove("error");
+  status.textContent = `Эх лавлагаа — ${field.dataset.sourcePage ? `хуудас ${field.dataset.sourcePage}: ` : ""}${field.dataset.sourceSnippet} · Санамж: лавлагаагүй, баталгаажаагүй мэдээллийг ашиглахгүй.`;
+}
+
+function registerComparisonSuggestion(metadata, silent = false) {
+  if (!validateComparisonContext()) return false;
+  const payload = comparisonMetadataPayload(metadata);
+  if (!payload.country && !payload.institution && !payload.program) return false;
+  state.comparisons.push({ id: uid(), createdAt: new Date().toISOString(), ...payload });
+  if (!silent) {
+    persist("Харьцуулах хөтөлбөр бүртгэгдлээ");
+    renderEvidence();
+    renderDashboard();
+  }
+  return true;
+}
+
+function renderComparisonSuggestions() {
+  const container = $("#comparison-suggestions");
+  if (!container) return;
+  if (!comparisonImportSuggestions.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+  container.hidden = false;
+  container.innerHTML = `
+    <div class="comparison-suggestions-head">
+      <div><strong>Файлаас илэрсэн баталгаатай хөтөлбөрүүд</strong><small>${comparisonImportSuggestions.length} санал · ${comparisonRejectedSuggestions} эргэлзээтэй block шүүгдсэн · эх лавлагаатай тулган баталгаажуулна</small></div>
+      <button class="button secondary" type="button" data-register-all-comparisons>Бүгдийг бүртгэх</button>
+    </div>
+    <div class="comparison-suggestion-list">
+      ${comparisonImportSuggestions.map((item, index) => `
+        <article class="comparison-suggestion">
+          <strong>${escapeHtml(item.program || "Хөтөлбөрийн нэр тодорхойгүй")}</strong>
+          <small>${escapeHtml(item.country || "Улс тодорхойгүй")} · ${escapeHtml(item.institution || "Сургууль/агентлаг тодорхойгүй")} · ${escapeHtml(item.credits || "кредит тодорхойгүй")} · ${escapeHtml(item.format || "хэлбэр тодорхойгүй")} · ${escapeHtml(item.duration || "хугацаа тодорхойгүй")}</small>
+          <p><b>Итгэлцүүр:</b> ${item.extractionQuality?.score || 0} · Баттай талбар: ${(item.extractionQuality?.strictFields || []).join(", ") || "байхгүй"}</p>
+          ${item.teacherRequirements ? `<p><b>Багш:</b> ${escapeHtml(item.teacherRequirements)}</p>` : ""}
+          <p>${escapeHtml(String(item.competencies || "").split(/\n/).slice(0, 3).join(" · ") || "Чадамжийн санал илрээгүй")}</p>
+          <div>
+            <button class="text-button" type="button" data-fill-comparison="${index}">Талбарт оруулах</button>
+            <button class="text-button" type="button" data-register-comparison="${index}">Матрицад бүртгэх</button>
+          </div>
+        </article>`).join("")}
+    </div>`;
+}
+
+async function handleComparisonFile(event) {
+  const file = event.target.files?.[0];
+  const label = $("#comparison-file-label");
+  const status = $("#comparison-file-status");
+  const form = $("#comparison-form");
+  if (label) label.textContent = file ? file.name : "Англи хэл дээрх PDF/TXT хөтөлбөр сонгох";
+  if (!file) return;
+  status.hidden = false;
+  status.classList.remove("error", "autofill");
+  status.textContent = `${file.name} файлын англи текстийг уншиж байна…`;
+  comparisonFormEvidence = {};
+  clearAutoFilledMetadata(form);
+  try {
+    const text = await extractComparisonDocumentText(file, (message) => {
+      status.textContent = message;
+    });
+    if (text.trim().length < 40) {
+      status.classList.add("error");
+      status.textContent = "Уншигдах текст илэрсэнгүй. OCR хийсэн PDF эсвэл TXT хувилбар ашиглана уу.";
+      return;
+    }
+    comparisonRejectedSuggestions = 0;
+    comparisonImportSuggestions = splitInternationalProgramBlocks(text, file.name);
+    const wholeDocumentInferred = comparisonImportSuggestions.length ? null : inferInternationalProgramMetadata({ text, fileName: file.name });
+    const inferred = comparisonImportSuggestions[0] || (wholeDocumentInferred?.extractionQuality?.trusted ? wholeDocumentInferred : {});
+    const applied = applyComparisonMetadata(form, inferred);
+    renderComparisonSuggestions();
+    status.classList.toggle("autofill", applied.length > 0);
+    status.textContent = applied.length
+      ? `${file.name}: ${text.length.toLocaleString()} тэмдэгт уншлаа. ${comparisonImportSuggestions.length} баталгаатай санал илэрлээ, ${comparisonRejectedSuggestions} эргэлзээтэй block шүүгдсэн. Эхний саналаар бөглөв: ${applied.join(", ")}.`
+      : `${file.name}: ${text.length.toLocaleString()} тэмдэгт уншлаа. Баталгаатай хөтөлбөрийн санал илэрсэнгүй; ${comparisonRejectedSuggestions} эргэлзээтэй block-ийг худал/холимог мэдээлэл үүсгэхээс сэргийлж бөглөөгүй. Зөвхөн эх файл/албан ёсны холбоосоос баталгаажуулсан мэдээллийг гараар оруулна уу.`;
+  } catch (error) {
+    status.classList.add("error");
+    status.textContent = `Олон улсын хөтөлбөрийн файлыг унших боломжгүй: ${error.message}. TXT/PDF текст хувилбарыг ашиглана уу.`;
+  }
+}
+
+async function extractComparisonDocumentText(file, onProgress) {
+  const extension = file.name.split(".").pop().toLowerCase();
+  if (extension === "txt" || extension === "md") return `[[PAGE 1]]\n${await file.text()}`;
+  if (extension !== "pdf") throw new Error("энэ төрлийн файлыг шууд уншихгүй");
+
+  const pdfjs = await import(resolveAppAsset("vendor/pdf.min.mjs"));
+  pdfjs.GlobalWorkerOptions.workerSrc = resolveAppAsset("vendor/pdf.worker.min.mjs");
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    onProgress(`PDF текст задлаж байна: ${pageNumber}/${pdf.numPages} хуудас`);
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(`[[PAGE ${pageNumber}]]\n${content.items.map((item) => item.str).join(" ")}`);
+  }
+  return pages.join("\n");
 }
 
 async function extractDocumentText(file, onProgress) {
@@ -1680,9 +2610,16 @@ function handleDataForm(event, collection, mapper, message) {
     return;
   }
   const data = new FormData(event.currentTarget);
+  const preservedComparisonContext = collection === "comparisons" ? comparisonContextFromForm(event.currentTarget) : null;
   state[collection].push({ id: uid(), createdAt: new Date().toISOString(), ...mapper(data) });
   persist(message);
   event.currentTarget.reset();
+  if (preservedComparisonContext) {
+    event.currentTarget.elements.localProgramName.value = preservedComparisonContext.localProgramName;
+    event.currentTarget.elements.localProgramLevel.value = preservedComparisonContext.localProgramLevel;
+    event.currentTarget.elements.localProgramTargetGroup.value = preservedComparisonContext.localProgramTargetGroup;
+  }
+  if (collection === "comparisons") comparisonFormEvidence = {};
   renderEvidence();
   renderDashboard();
 }
@@ -1690,12 +2627,209 @@ function handleDataForm(event, collection, mapper, message) {
 function renderEvidence() {
   renderDocumentEvidence();
   renderAggregatedCompetencies();
+  renderFocusGapSummary();
+  buildCompetencyTable();
   renderEvidenceList("focus", state.focusGroups, (item) => ({
-    title: item.agency, detail: `${item.date} · ${item.participants} оролцогч · ${item.facilitator}`, tags: ["Фокус бүлэг", "Мезо"]
+    title: item.agency,
+    detail: `${item.date} · ${item.participants} оролцогч · ${item.facilitator}`,
+    tags: ["Фокус бүлэг", programLabel(focusProgramId(item)) || "Мезо"]
   }));
-  renderEvidenceList("comparison", state.comparisons, (item) => ({
-    title: `${item.institution} — ${item.program}`, detail: `${item.country} · ${item.credits} · ${item.format}`, tags: ["Албан ёсны", "Харьцуулалт"]
-  }));
+  renderComparisonMatrix();
+}
+
+function comparisonProgramId(item) {
+  if (item?.programId && (item.programId === "all" || programDefinitions.some((program) => program.id === item.programId))) return item.programId;
+  return inferComparisonProgramId(`${item?.program || ""} ${item?.institution || ""} ${item?.competencies || ""}`);
+}
+
+function visibleComparisons() {
+  return state.comparisons.filter((item) => {
+    const programId = comparisonProgramId(item);
+    return selectedComparisonProgramFilter === "all" || programId === "all" || programId === selectedComparisonProgramFilter;
+  });
+}
+
+function renderComparisonProgramFilters() {
+  const buttons = $$("[data-comparison-program]");
+  if (!buttons.length) return;
+  buttons.forEach((button) => {
+    const programId = button.dataset.comparisonProgram || "all";
+    const count = programId === "all"
+      ? state.comparisons.length
+      : state.comparisons.filter((item) => {
+          const itemProgram = comparisonProgramId(item);
+          return itemProgram === "all" || itemProgram === programId;
+        }).length;
+    button.classList.toggle("active", programId === selectedComparisonProgramFilter);
+    button.disabled = programId !== "all" && count === 0;
+    button.innerHTML = `${programId === "all" ? "Бүгд" : programLabel(programId)} <span>${count}</span>`;
+  });
+}
+
+function comparisonLocalContextLabel(item) {
+  const name = item?.localProgramName || "";
+  const level = item?.localProgramLevelLabel || programLevelLabel(item?.localProgramLevel || "");
+  const target = item?.localProgramTargetGroup || "";
+  if (!name && !target && !item?.localProgramLevel) return "";
+  return `${name || "Хөтөлбөрийн нэр оруулаагүй"} · ${level || "Түвшин оруулаагүй"} · ${target || "Зорилтот бүлэг оруулаагүй"}`;
+}
+
+function renderComparisonContextSummary(items = visibleComparisons()) {
+  const container = $("#comparison-context-summary");
+  if (!container) return;
+  const context = comparisonContextFromForm();
+  const contextReady = context.localProgramName || context.localProgramLevel || context.localProgramTargetGroup;
+  if (!items.length && !contextReady) {
+    container.innerHTML = "";
+    return;
+  }
+  const contextKey = normalizeKey(`${context.localProgramName}-${context.localProgramLevel}-${context.localProgramTargetGroup}`);
+  const matchedByCurrentContext = contextKey
+    ? items.filter((item) => normalizeKey(`${item.localProgramName || ""}-${item.localProgramLevel || ""}-${item.localProgramTargetGroup || ""}`) === contextKey).length
+    : 0;
+  const storedContexts = new Set(items.map((item) => comparisonLocalContextLabel(item)).filter(Boolean));
+  container.innerHTML = `
+    <article class="comparison-context-card">
+      <p class="eyebrow">ХАРЬЦУУЛАЛТЫН КОНТЕКСТ</p>
+      <h3>${escapeHtml(context.localProgramName || "Сургалтын хөтөлбөрийн мэдээлэл оруулаагүй")}</h3>
+      <p><b>Түвшин:</b> ${escapeHtml(context.localProgramLevelLabel || "Сонгоогүй")} · <b>Зорилтот бүлэг:</b> ${escapeHtml(context.localProgramTargetGroup || "Оруулаагүй")}</p>
+      <p>Матриц дахь олон улсын хөтөлбөрүүдийг энэ самбарын мэдээлэлтэй холбон хадгалж, тухайн хөтөлбөрт хамаарах харьцуулалтын нотолгоо болгон ангилна.</p>
+      <div class="comparison-context-stats">
+        <span>${items.length} харьцуулах хөтөлбөр</span>
+        <span>${storedContexts.size || 0} хөтөлбөрийн контекст</span>
+        ${contextKey ? `<span>${matchedByCurrentContext} нь одоогийн самбартай таарч байна</span>` : ""}
+      </div>
+    </article>`;
+}
+
+function comparisonCompetencies(item) {
+  return splitFocusGapItems(item.competencies).map(cleanCompetencyName).filter(Boolean);
+}
+
+function renderComparisonMatrix() {
+  $("#comparison-count").textContent = state.comparisons.length;
+  renderComparisonProgramFilters();
+  const list = $("#comparison-list");
+  const items = visibleComparisons();
+  renderComparisonContextSummary(items);
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">Бүртгэл хараахан үүсээгүй.</div>`;
+    return;
+  }
+  const allCompetencies = [...new Set(items.flatMap(comparisonCompetencies))].slice(0, 14);
+  list.innerHTML = `
+    <div class="comparison-matrix">
+      <div class="comparison-matrix-head">
+        <span>Хөтөлбөр</span><span>Кредит</span><span>Хэлбэр</span><span>Хугацаа</span><span>Багшийн шаардлага</span><span>Чадамжийн харьцуулалт</span><span></span>
+      </div>
+      ${items.slice().reverse().map((item) => {
+        const competencies = comparisonCompetencies(item);
+        const competencySet = new Set(competencies.map((value) => surveyCompetencyKey(value)));
+        return `<article class="comparison-matrix-row">
+          <div>
+            <strong>${escapeHtml(item.program || "Хөтөлбөрийн нэргүй")}</strong>
+            <small>${escapeHtml(item.institution || "—")} · ${escapeHtml(item.country || "—")} · ${escapeHtml(programLabel(comparisonProgramId(item)) || "Нийтлэг")}</small>
+            ${comparisonLocalContextLabel(item) ? `<p class="document-program-context"><b>Хамааруулах хөтөлбөр:</b> ${escapeHtml(comparisonLocalContextLabel(item))}</p>` : `<p class="document-program-context"><b>Хамааруулах хөтөлбөр:</b> Контекстгүй хуучин бүртгэл</p>`}
+          </div>
+          <span title="${escapeHtml(sourceEvidenceLabel(item.sourceEvidence?.credits) || "")}">${escapeHtml(item.credits || "—")}</span>
+          <span title="${escapeHtml(sourceEvidenceLabel(item.sourceEvidence?.format) || "")}">${escapeHtml(item.format || "—")}</span>
+          <span title="${escapeHtml(sourceEvidenceLabel(item.sourceEvidence?.duration) || "")}">${escapeHtml(item.duration || "—")}</span>
+          <span title="${escapeHtml(sourceEvidenceLabel(item.sourceEvidence?.teacherRequirements) || "")}">${escapeHtml(item.teacherRequirements || "—")}</span>
+          <div class="comparison-competency-grid">
+            ${allCompetencies.map((competency) => {
+              const key = surveyCompetencyKey(competency);
+              return `<span class="${competencySet.has(key) ? "matched" : ""}">${competencySet.has(key) ? "✓" : "—"} ${escapeHtml(competency)}</span>`;
+            }).join("")}
+          </div>
+          <button class="delete-item" type="button" data-delete="comparison" data-id="${item.id}">Устгах</button>
+        </article>`;
+      }).join("")}
+    </div>`;
+}
+
+function focusProgramId(item) {
+  if (item?.programId && programDefinitions.some((program) => program.id === item.programId)) return item.programId;
+  const agency = String(item?.agency || "").toLocaleLowerCase("mn");
+  if (agency.includes("цагдаа")) return "police";
+  if (agency.includes("хил")) return "border";
+  if (agency.includes("шүүх") || agency.includes("шийдвэр")) return "corrections";
+  if (agency.includes("онцгой")) return "emergency";
+  return "";
+}
+
+function renderFocusGapSummary() {
+  const container = $("#focus-gap-summary");
+  if (!container) return;
+  const visibleFocusGroups = state.focusGroups.filter((item) => isProgramAllowed(focusProgramId(item)) && isAgencyAllowed(item.agency));
+  if (!visibleFocusGroups.length) {
+    container.innerHTML = `<div class="empty-state">Фокус бүлгийн ярилцлагын дутагдалтай чадамж бүртгэгдээгүй байна.</div>`;
+    return;
+  }
+  const grouped = new Map();
+  visibleFocusGroups.forEach((item) => {
+    const programId = focusProgramId(item) || "other";
+    if (!grouped.has(programId)) {
+      grouped.set(programId, {
+        programId,
+        programName: programLabel(programId) || "Тодорхойгүй хөтөлбөр",
+        records: 0,
+        gaps: new Map()
+      });
+    }
+    const group = grouped.get(programId);
+    group.records += 1;
+    splitFocusGapItems(item.gaps).forEach((gap) => {
+      const key = normalizeKey(gap);
+      if (!key) return;
+      if (!group.gaps.has(key)) {
+        group.gaps.set(key, { name: gap, count: 0, agencies: new Set(), evidence: [] });
+      }
+      const summary = group.gaps.get(key);
+      summary.count += 1;
+      if (item.agency) summary.agencies.add(item.agency);
+      if (item.evidence) summary.evidence.push(item.evidence);
+    });
+  });
+  const groups = [...grouped.values()].sort((left, right) => left.programName.localeCompare(right.programName, "mn"));
+  container.innerHTML = `
+    <div class="focus-summary-head">
+      <div>
+        <p class="eyebrow">ХӨТӨЛБӨРӨӨР НЭГТГЭСЭН</p>
+        <h3>Дутагдалтай чадамжийн жагсаалт</h3>
+      </div>
+      <span>${visibleFocusGroups.length} ярилцлага</span>
+    </div>
+    <div class="focus-program-gaps">
+      ${groups.map((group) => renderFocusGapProgram(group)).join("")}
+    </div>`;
+}
+
+function renderFocusGapProgram(group) {
+  const gaps = [...group.gaps.values()]
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "mn"))
+    .slice(0, 10);
+  return `<article class="focus-program-card">
+    <header>
+      <div>
+        <strong>${escapeHtml(group.programName)}</strong>
+        <small>${group.records} фокус бүлгийн тэмдэглэл</small>
+      </div>
+      <span>${gaps.length}</span>
+    </header>
+    ${gaps.length ? `<ol class="focus-gap-list">
+      ${gaps.map((gap) => `<li>
+        <b>${escapeHtml(gap.name)}</b>
+        <small>${gap.count} удаа дурдсан · ${escapeHtml([...gap.agencies].join(", ") || "байгууллага тодорхойгүй")}</small>
+      </li>`).join("")}
+    </ol>` : `<div class="empty-state">Дутагдалтай чадамжийн кодчилол ороогүй байна.</div>`}
+  </article>`;
+}
+
+function splitFocusGapItems(text) {
+  return String(text || "")
+    .split(/\r?\n|;|•|·|\d+\.\s+/)
+    .map((item) => item.replace(/^[-–—*,\s]+/, "").replace(/\s+/g, " ").trim())
+    .filter((item) => item.length >= 3);
 }
 
 function renderDocumentEvidence() {
@@ -1751,6 +2885,7 @@ function aggregateDocumentCompetencies(agency = "") {
           description: competency.description || "",
           documents: new Set(),
           agencies: new Set(),
+          programs: new Set(),
           evidence: [],
           keywords: new Set(),
           signalScore: 0
@@ -1759,6 +2894,8 @@ function aggregateDocumentCompetencies(agency = "") {
       const item = aggregated.get(key);
       item.documents.add(documentItem.id);
       item.agencies.add(documentItem.agency);
+      const documentProgramId = documentItem.programId || programByAgency(documentItem.agency)?.id || "";
+      if (documentProgramId) item.programs.add(documentProgramId);
       item.signalScore += Number(competency.score) || 1;
       coverageKeywordsForCompetency(competency).forEach((keyword) => item.keywords.add(keyword));
       if (competency.evidence) item.evidence.push({ document: documentItem.title, quote: competency.evidence });
@@ -1769,6 +2906,7 @@ function aggregateDocumentCompetencies(agency = "") {
     documentCount: item.documents.size,
     agencyCount: item.agencies.size,
     agencies: [...item.agencies],
+    programIds: [...item.programs],
     keywords: [...item.keywords]
   })).sort((a, b) => b.documentCount - a.documentCount || b.agencyCount - a.agencyCount || b.signalScore - a.signalScore || a.name.localeCompare(b.name, "mn"));
 }
@@ -1793,6 +2931,40 @@ function coverageKeywordsForCompetency(competency) {
   return [...new Set([...(competency.keywords || []), ...(catalog?.keywords || [])])];
 }
 
+function competencyProgramMatch(programIds, programId = selectedSurveyProgramFilter) {
+  if (programId === "all") return true;
+  const ids = normalizeSurveyProgramIds(programIds);
+  return ids.length === 0 || ids.includes(programId);
+}
+
+function competenciesForCoverageComparison(agency = "", programId = selectedSurveyProgramFilter) {
+  const merged = new Map();
+  aggregateDocumentCompetencies(agency).forEach((item) => {
+    merged.set(item.id || surveyCompetencyKey(item.name), {
+      id: item.id || surveyCompetencyKey(item.name),
+      name: item.name,
+      description: item.description || `${item.documentCount} баримтын нотолгоотой чадамж`,
+      keywords: item.keywords || [],
+      programIds: item.programIds || []
+    });
+  });
+  surveyCompetencies().forEach((item) => {
+    const key = item.id || surveyCompetencyKey(item.name);
+    if (!key || merged.has(key)) return;
+    const catalog = documentCompetencyCatalog.find((catalogItem) => catalogItem.id === item.id || catalogItem.name === item.name);
+    merged.set(key, {
+      id: key,
+      name: item.name,
+      description: item.detail || item.description || "",
+      keywords: [...new Set([...(item.keywords || []), ...(catalog?.keywords || [])])],
+      programIds: item.programIds || []
+    });
+  });
+  return [...merged.values()]
+    .filter((item) => competencyProgramMatch(item.programIds, programId))
+    .sort((left, right) => left.name.localeCompare(right.name, "mn"));
+}
+
 function renderAggregatedCompetencies() {
   const selectedAgency = renderCompetencyAgencyFilter();
   const aggregated = aggregateDocumentCompetencies(selectedAgency);
@@ -1804,6 +2976,7 @@ function renderAggregatedCompetencies() {
   if (!aggregated.length) {
     list.innerHTML = `<div class="empty-state">${selectedAgency ? `${escapeHtml(selectedAgency)} байгууллагын` : "Баримтуудаас"} баталгаажуулсан чадамж хараахан алга.</div>`;
     if (curriculumCoverageText) void analyzeCurriculumCoverage(true);
+    if (learningOutcomeCoverageText) void analyzeLearningOutcomeCoverage(true);
     return;
   }
   const maxDocuments = Math.max(...aggregated.map((item) => item.documentCount), 1);
@@ -1822,6 +2995,7 @@ function renderAggregatedCompetencies() {
       </div>
     </article>`).join("");
   if (curriculumCoverageText) void analyzeCurriculumCoverage(true);
+  if (learningOutcomeCoverageText) void analyzeLearningOutcomeCoverage(true);
 }
 
 async function handleCurriculumCoverageFile(event) {
@@ -1937,6 +3111,89 @@ function renderCurriculumCoverageResults(results) {
     </article>`).join("");
 }
 
+function updateLearningOutcomeCount() {
+  $("#learning-outcome-char-count").textContent = $("#learning-outcome-text").value.length.toLocaleString();
+}
+
+async function analyzeLearningOutcomeCoverage(silent = false) {
+  const text = $("#learning-outcome-text").value.trim();
+  const agency = $("#competency-agency-filter").value;
+  const competencies = competenciesForCoverageComparison(agency, selectedSurveyProgramFilter);
+  if (text.length < 20) {
+    if (!silent) {
+      showToast("Суралцахуйн үр дүнг дор хаяж 20 тэмдэгтээр оруулна уу");
+      $("#learning-outcome-text").focus();
+    }
+    return;
+  }
+  if (!competencies.length) {
+    learningOutcomeCoverageText = text;
+    learningOutcomeCoverageResults = [];
+    renderLearningOutcomeCoverageResults([]);
+    if (!silent) showToast("Харьцуулах чадамжийн жагсаалт хараахан алга");
+    return;
+  }
+
+  const runId = ++learningOutcomeCoverageRunId;
+  const button = $("#analyze-learning-outcomes");
+  if (!silent) {
+    button.disabled = true;
+    button.textContent = "Харьцуулж байна…";
+  }
+  try {
+    const { analyzeCompetencyCoverage } = await import("./coverage-analysis.mjs?v=20260706-sentence2");
+    const results = analyzeCompetencyCoverage({ competencies, text });
+    if (runId !== learningOutcomeCoverageRunId) return;
+    learningOutcomeCoverageText = text;
+    learningOutcomeCoverageResults = results;
+    renderLearningOutcomeCoverageResults(results);
+    if (!silent) showToast(`${results.length} чадамжийг суралцахуйн үр дүнтэй харьцууллаа`);
+  } catch (error) {
+    if (!silent) showToast(error.message || "Суралцахуйн үр дүнг харьцуулж чадсангүй");
+  } finally {
+    if (!silent) {
+      button.disabled = false;
+      button.textContent = "Суралцахуйн үр дүнг харьцуулах";
+    }
+  }
+}
+
+function renderLearningOutcomeCoverageResults(results) {
+  const summary = $("#learning-outcome-summary");
+  const caution = $("#learning-outcome-caution");
+  const exportButton = $("#export-learning-outcome-coverage");
+  const list = $("#learning-outcome-results");
+  const counts = {
+    covered: results.filter((item) => item.status === "covered").length,
+    partial: results.filter((item) => item.status === "partial").length,
+    missing: results.filter((item) => item.status === "missing").length
+  };
+  $("#learning-outcome-covered-count").textContent = counts.covered;
+  $("#learning-outcome-partial-count").textContent = counts.partial;
+  $("#learning-outcome-missing-count").textContent = counts.missing;
+  summary.hidden = results.length === 0;
+  caution.hidden = results.length === 0;
+  exportButton.hidden = results.length === 0;
+  if (!results.length) {
+    list.innerHTML = learningOutcomeCoverageText
+      ? `<div class="empty-state">Сонгосон шүүлтүүрт харьцуулах чадамжийн жагсаалт алга.</div>`
+      : "";
+    return;
+  }
+
+  const labels = { covered: "Тусгасан", partial: "Хэсэгчлэн", missing: "Илрээгүй" };
+  const order = { missing: 0, partial: 1, covered: 2 };
+  list.innerHTML = results.slice().sort((left, right) => order[left.status] - order[right.status] || left.name.localeCompare(right.name, "mn")).map((item) => `
+    <article class="coverage-result ${item.status}">
+      <div class="coverage-result-head">
+        <strong>${escapeHtml(item.name)}</strong>
+        <span class="coverage-status">${labels[item.status]}</span>
+      </div>
+      <p>${escapeHtml(item.rationale)}${item.matchedTerms.length ? ` · Таарсан ойлголт: ${escapeHtml(item.matchedTerms.join(", "))}` : ""}</p>
+      ${item.evidence ? `<div class="coverage-evidence"><b>СУРАЛЦАХУЙН ҮР ДҮНГИЙН ӨГҮҮЛБЭР</b>“${escapeHtml(item.evidence)}”</div>` : ""}
+    </article>`).join("");
+}
+
 function exportCurriculumCoverageCsv() {
   if (!curriculumCoverageResults.length) {
     showToast("Экспортлох хамрах байдлын үр дүн алга");
@@ -1956,6 +3213,26 @@ function exportCurriculumCoverageCsv() {
   const headers = ["curriculum", "agency_filter", "competency", "coverage_status", "matched_terms", "rationale", "curriculum_evidence"];
   const csv = "\uFEFF" + [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
   downloadBlob(csv, "text/csv;charset=utf-8", `curriculum-coverage-${dateStamp()}.csv`);
+}
+
+function exportLearningOutcomeCoverageCsv() {
+  if (!learningOutcomeCoverageResults.length) {
+    showToast("Экспортлох суралцахуйн үр дүнгийн харьцуулалт алга");
+    return;
+  }
+  const program = selectedSurveyProgramFilter === "all" ? "Бүх хөтөлбөр" : programLabel(selectedSurveyProgramFilter);
+  const labels = { covered: "Тусгасан", partial: "Хэсэгчлэн", missing: "Илрээгүй" };
+  const rows = learningOutcomeCoverageResults.map((item) => [
+    program,
+    item.name,
+    labels[item.status],
+    item.matchedTerms.join("; "),
+    item.rationale,
+    item.evidence
+  ]);
+  const headers = ["program_filter", "competency", "learning_outcome_coverage_status", "matched_terms", "rationale", "learning_outcome_evidence"];
+  const csv = "\uFEFF" + [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  downloadBlob(csv, "text/csv;charset=utf-8", `learning-outcome-coverage-${dateStamp()}.csv`);
 }
 
 function renderEvidenceList(prefix, items, projector) {
@@ -2204,19 +3481,86 @@ function setupEvents() {
   $("#curriculum-coverage-text").addEventListener("input", updateCurriculumCoverageCount);
   $("#analyze-curriculum-coverage").addEventListener("click", () => analyzeCurriculumCoverage());
   $("#export-curriculum-coverage").addEventListener("click", exportCurriculumCoverageCsv);
+  $("#learning-outcome-text").addEventListener("input", updateLearningOutcomeCount);
+  $("#analyze-learning-outcomes").addEventListener("click", () => analyzeLearningOutcomeCoverage());
+  $("#export-learning-outcome-coverage").addEventListener("click", exportLearningOutcomeCoverageCsv);
   $("#focus-form").addEventListener("submit", (event) => handleDataForm(event, "focusGroups", (data) => ({
-    agency: data.get("agency"), date: data.get("date"), participants: Number(data.get("participants")),
+    programId: data.get("programId"), agency: data.get("agency"), date: data.get("date"), participants: Number(data.get("participants")),
     facilitator: data.get("facilitator"), gaps: data.get("gaps"), evidence: data.get("evidence")
   }), "Фокус бүлэг бүртгэгдлээ"));
+  $("#comparison-file").addEventListener("change", handleComparisonFile);
+  $("#comparison-form").addEventListener("focusin", (event) => showComparisonFieldEvidence(event.target));
+  $("#comparison-form").addEventListener("click", (event) => showComparisonFieldEvidence(event.target));
   $("#comparison-form").addEventListener("submit", (event) => handleDataForm(event, "comparisons", (data) => ({
+    programId: data.get("programId") || "all",
+    localProgramName: data.get("localProgramName"),
+    localProgramLevel: data.get("localProgramLevel"),
+    localProgramLevelLabel: programLevelLabel(data.get("localProgramLevel")),
+    localProgramTargetGroup: data.get("localProgramTargetGroup"),
     country: data.get("country"), institution: data.get("institution"), program: data.get("program"),
-    credits: data.get("credits"), format: data.get("format"), url: data.get("url"), competencies: data.get("competencies")
+    credits: data.get("credits"), format: data.get("format"), duration: data.get("duration"), teacherRequirements: data.get("teacherRequirements"),
+    url: data.get("url"), competencies: data.get("competencies"), sourceEvidence: comparisonFormEvidence
   }), "Харьцуулах хөтөлбөр бүртгэгдлээ"));
+  ["localProgramName", "localProgramLevel", "localProgramTargetGroup"].forEach((name) => {
+    const field = $("#comparison-form")?.elements[name];
+    field?.addEventListener("input", () => {
+      syncComparisonProgramFromContext();
+      renderComparisonMatrix();
+    });
+    field?.addEventListener("change", () => {
+      syncComparisonProgramFromContext();
+      renderComparisonMatrix();
+    });
+  });
+  $("#comparison-form")?.elements.programId?.addEventListener("change", (event) => {
+    delete event.currentTarget.dataset.autoContextProgram;
+  });
   $("#tools").addEventListener("click", (event) => {
+    const fillButton = event.target.closest("[data-fill-comparison]");
+    const registerButton = event.target.closest("[data-register-comparison]");
+    const registerAllButton = event.target.closest("[data-register-all-comparisons]");
+    const comparisonProgramButton = event.target.closest("[data-comparison-program]");
+    if (fillButton) {
+      fillComparisonForm(comparisonImportSuggestions[Number(fillButton.dataset.fillComparison)] || {});
+      return;
+    }
+    if (registerButton) {
+      const ok = registerComparisonSuggestion(comparisonImportSuggestions[Number(registerButton.dataset.registerComparison)] || {});
+      if (ok) showToast("Харьцуулах хөтөлбөр матрицад нэмэгдлээ");
+      return;
+    }
+    if (registerAllButton) {
+      if (!validateComparisonContext()) return;
+      let added = 0;
+      comparisonImportSuggestions.forEach((item) => {
+        if (registerComparisonSuggestion(item, true)) added += 1;
+      });
+      if (added) {
+        persist(`${added} харьцуулах хөтөлбөр бүртгэгдлээ`);
+        renderComparisonMatrix();
+        renderDashboard();
+        showToast(`${added} хөтөлбөр матрицад нэмэгдлээ`);
+      }
+      return;
+    }
+    if (comparisonProgramButton) {
+      selectedComparisonProgramFilter = comparisonProgramButton.dataset.comparisonProgram || "all";
+      renderComparisonMatrix();
+      return;
+    }
     const button = event.target.closest("[data-delete]");
     if (button && confirm("Энэ бүртгэлийг устгах уу?")) deleteEvidence(button.dataset.delete, button.dataset.id);
   });
   $("#survey-form").addEventListener("submit", handleSurvey);
+  $("#competency-table").addEventListener("change", captureSurveyDraftRatings);
+  $$(".source-filter").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.surveySource) selectedSurveySourceFilter = button.dataset.surveySource || "all";
+      if (button.dataset.surveyProgram) selectedSurveyProgramFilter = button.dataset.surveyProgram || "all";
+      buildCompetencyTable();
+      if (learningOutcomeCoverageText) void analyzeLearningOutcomeCoverage(true);
+    });
+  });
   $("#export-project").addEventListener("click", exportJson);
   $("#export-survey").addEventListener("click", exportSurveyCsv);
   $("#print-report").addEventListener("click", () => window.print());
@@ -2429,3 +3773,4 @@ async function initializeApp() {
   renderReports();
   applyAccessControl();
 }
+

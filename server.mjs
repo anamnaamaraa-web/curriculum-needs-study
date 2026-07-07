@@ -654,5 +654,16 @@ function mimeType(filePath) {
 }
 
 function safeError(error) {
-  return error instanceof Error ? error.message : "Unknown error";
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const preferred = error.message || error.error || error.detail || error.hint || error.code;
+    if (preferred && preferred !== error) return safeError(preferred);
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return Object.prototype.toString.call(error);
+    }
+  }
+  return "Unknown error";
 }
