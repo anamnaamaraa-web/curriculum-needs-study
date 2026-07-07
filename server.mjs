@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,12 +8,14 @@ const port = Number(process.env.PORT || 4173);
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceDir = path.resolve(rootDir, "..");
 const envPath = path.join(workspaceDir, ".env.local");
+const dataDir = path.join(rootDir, "data");
+const sharedStatePath = path.join(dataDir, "shared-state.json");
 
 await loadLocalEnv(envPath);
 
 const model = process.env.OPENAI_MODEL || "gpt-5.5";
 const publicBaseUrl = normalizePublicBaseUrl(process.env.PUBLIC_BASE_URL);
-const maxRequestBytes = 1_000_000;
+const maxRequestBytes = 15_000_000;
 const maxDocumentChars = 120_000;
 
 const competencySchema = {
@@ -119,6 +121,18 @@ const server = createServer(async (request, response) => {
         model,
         publicBaseUrl: publicBaseUrl || null
       });
+    }
+
+    if (request.method === "GET" && request.url === "/api/state") {
+      return sendJson(response, 200, {
+        ok: true,
+        state: await readSharedState(),
+        storage: "server-file"
+      });
+    }
+
+    if (request.method === "POST" && request.url === "/api/state") {
+      return await saveSharedState(request, response);
     }
 
     if (request.method === "GET" && request.url === "/robots.txt") {
@@ -271,6 +285,37 @@ async function analyzeCompetencies(request, response) {
       outputTokens: apiPayload.usage?.output_tokens ?? null
     }
   });
+}
+
+async function readSharedState() {
+  try {
+    const content = await readFile(sharedStatePath, "utf8");
+    const payload = JSON.parse(content);
+    return payload && typeof payload === "object" ? payload : null;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function saveSharedState(request, response) {
+  const payload = await readJsonBody(request);
+  const incomingState = payload?.state;
+  if (!incomingState || typeof incomingState !== "object" || Array.isArray(incomingState)) {
+    return sendJson(response, 400, { error: "Хадгалах state объект буруу байна." });
+  }
+
+  const savedAt = new Date().toISOString();
+  const storedState = {
+    ...incomingState,
+    serverMeta: {
+      ...(incomingState.serverMeta && typeof incomingState.serverMeta === "object" ? incomingState.serverMeta : {}),
+      savedAt
+    }
+  };
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(sharedStatePath, `${JSON.stringify(storedState, null, 2)}\n`, "utf8");
+  return sendJson(response, 200, { ok: true, savedAt });
 }
 
 async function serveStatic(request, response) {

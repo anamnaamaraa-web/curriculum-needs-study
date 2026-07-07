@@ -43,6 +43,14 @@ docker run -p 4173:4173 --env-file .env.local curriculum-needs-study
 
 Public сервер дээр reverse proxy эсвэл hosting provider нь HTTPS домэйнтэй холбож өгнө.
 
+Shared дата хадгалах path:
+
+```text
+/app/data/shared-state.json
+```
+
+Docker/hosting дээр дата алдагдуулахгүй байхын тулд `/app/data` path-д volume эсвэл persistent disk mount хийнэ.
+
 ## 4. Хайлтын системд нээлттэй болгох
 
 Сайт public домэйн дээр ажилласны дараа дараах хаягууд нээгдэж байгаа эсэхийг шалгана.
@@ -58,14 +66,16 @@ https://your-domain.mn/sitemap.xml
 
 Одоогийн хувилбар нь судалгааны prototype шинжтэй:
 
-- хэрэглэгчийн эрхийн тохиргоо browser-ийн localStorage дээр хадгалагдана;
-- password нь тухайн browser-ийн localStorage/sessionStorage урсгалд тулгуурласан;
-- олон хэрэглэгчийн төвлөрсөн өгөгдлийн сан, audit log, сервер талын authorization хараахан бүрэн backend биш.
+- үндсэн дата серверийн `data/shared-state.json` файлд хадгалагдана;
+- browser-ийн `localStorage` нь түр fallback cache байдлаар ашиглагдана;
+- public hosting дээр дата алдагдуулахгүй байхын тулд persistent disk, mounted volume эсвэл database заавал тохируулна;
+- password болон эрхийн тохиргоо prototype түвшний shared state-д хадгалагдаж байгаа тул байгууллагын production түвшний authentication хараахан биш;
+- олон хэрэглэгчийн audit log, permission conflict control, сервер талын бүрэн authorization хараахан бүрэн backend биш.
 
 Иймээс байгууллагын бодит, мэдрэмтгий судалгааны өгөгдөлтэй public ашиглахын өмнө:
 
 1. сервер талын хэрэглэгчийн бүртгэл ба password hashing;
-2. төвлөрсөн өгөгдлийн сан;
+2. төвлөрсөн өгөгдлийн сан эсвэл persistent storage;
 3. role-based authorization;
 4. HTTPS domain;
 5. backup ба audit log;

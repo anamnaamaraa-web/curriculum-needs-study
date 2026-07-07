@@ -74,6 +74,7 @@ const deliverables = [
 
 const storageKey = "strategicCurriculumNeedsProjectV3";
 const sessionEmailKey = "strategicCurriculumNeedsCurrentEmail";
+const sharedStateApiPath = "/api/state";
 const statusLabels = {
   "not-started": "Эхлээгүй",
   "in-progress": "Хийгдэж байна",
@@ -113,6 +114,8 @@ let curriculumCoverageFileName = "";
 let curriculumCoverageText = "";
 let curriculumCoverageResults = [];
 let curriculumCoverageRunId = 0;
+let sharedStateSaveTimer = 0;
+let sharedStateSaveInFlight = Promise.resolve();
 
 function defaultState() {
   const tasks = createTaskMap();
@@ -128,26 +131,30 @@ function defaultState() {
   };
 }
 
+function normalizeProjectState(saved) {
+  if (!saved || typeof saved !== "object") return defaultState();
+  const base = defaultState();
+  const legacyTasks = saved.tasks && typeof saved.tasks === "object" ? saved.tasks : {};
+  const programTasks = { ...base.programTasks };
+  programDefinitions.forEach((program) => {
+    const savedProgramTasks = saved.programTasks?.[program.id];
+    programTasks[program.id] = createTaskMap(savedProgramTasks || legacyTasks);
+  });
+  return {
+    tasks: createTaskMap(legacyTasks),
+    programTasks,
+    documents: Array.isArray(saved.documents) ? saved.documents : [],
+    focusGroups: Array.isArray(saved.focusGroups) ? saved.focusGroups : [],
+    comparisons: Array.isArray(saved.comparisons) ? saved.comparisons : [],
+    surveys: Array.isArray(saved.surveys) ? saved.surveys : [],
+    access: normalizeAccess(saved.access),
+    serverMeta: saved.serverMeta && typeof saved.serverMeta === "object" ? saved.serverMeta : {}
+  };
+}
+
 function loadState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
-    if (!saved || typeof saved !== "object") return defaultState();
-    const base = defaultState();
-    const legacyTasks = saved.tasks && typeof saved.tasks === "object" ? saved.tasks : {};
-    const programTasks = { ...base.programTasks };
-    programDefinitions.forEach((program) => {
-      const savedProgramTasks = saved.programTasks?.[program.id];
-      programTasks[program.id] = createTaskMap(savedProgramTasks || legacyTasks);
-    });
-    return {
-      tasks: createTaskMap(legacyTasks),
-      programTasks,
-      documents: Array.isArray(saved.documents) ? saved.documents : [],
-      focusGroups: Array.isArray(saved.focusGroups) ? saved.focusGroups : [],
-      comparisons: Array.isArray(saved.comparisons) ? saved.comparisons : [],
-      surveys: Array.isArray(saved.surveys) ? saved.surveys : [],
-      access: normalizeAccess(saved.access)
-    };
+    return normalizeProjectState(JSON.parse(localStorage.getItem(storageKey) || "null"));
   } catch {
     return defaultState();
   }
@@ -209,10 +216,95 @@ function createTaskMap(seed = {}) {
   return tasks;
 }
 
-function persist(message = "Өөрчлөлт хадгалагдсан") {
+function saveLocalState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+function persist(message = "Өөрчлөлт хадгалагдсан") {
+  saveLocalState();
+  queueSharedStateSave();
   $("#save-state").textContent = message;
   showToast(message);
+}
+
+async function hydrateSharedState() {
+  const saveState = $("#save-state");
+  try {
+    const response = await fetch(sharedStateApiPath, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    if (payload.state && typeof payload.state === "object") {
+      const localState = state;
+      const serverState = normalizeProjectState(payload.state);
+      if (stateActivityScore(localState) > stateActivityScore(serverState)) {
+        state = localState;
+        await saveSharedStateNow();
+        if (saveState) saveState.textContent = "Энэ browser-ийн өмнөх датаг сервер рүү шилжүүллээ";
+        return;
+      }
+      state = serverState;
+      saveLocalState();
+      if (saveState) saveState.textContent = "Серверийн хадгалсан дата ачааллаа";
+      return;
+    }
+    await saveSharedStateNow();
+    if (saveState) saveState.textContent = "Анхны датаг серверт хадгаллаа";
+  } catch (error) {
+    if (saveState) saveState.textContent = "Сервертэй холбогдсонгүй · түр local хадгалалт ашиглаж байна";
+    console.warn("Shared state load failed:", error);
+  }
+}
+
+function stateActivityScore(projectState) {
+  const project = normalizeProjectState(projectState);
+  const taskScore = Object.values(project.programTasks || {}).reduce((total, taskMap) => {
+    return total + Object.values(taskMap || {}).filter((task) => {
+      return task?.status && task.status !== "not-started" || task?.evidence || task?.note;
+    }).length;
+  }, 0);
+  const accessScore = Math.max(0, (project.access?.users || []).length - 2);
+  const passwordScore = Object.keys(project.access?.passwords || {}).length;
+  return taskScore
+    + project.documents.length * 10
+    + project.focusGroups.length * 6
+    + project.comparisons.length * 6
+    + project.surveys.length * 4
+    + accessScore * 2
+    + passwordScore;
+}
+
+function queueSharedStateSave() {
+  clearTimeout(sharedStateSaveTimer);
+  sharedStateSaveTimer = setTimeout(() => {
+    sharedStateSaveInFlight = sharedStateSaveInFlight
+      .catch(() => {})
+      .then(() => saveSharedStateNow())
+      .catch((error) => {
+        const saveState = $("#save-state");
+        if (saveState) saveState.textContent = "Серверт хадгалах үед алдаа гарлаа · local хадгалалт үлдсэн";
+        console.warn("Shared state save failed:", error);
+      });
+  }, 350);
+}
+
+async function saveSharedStateNow() {
+  const response = await fetch(sharedStateApiPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify({ state })
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  const saveState = $("#save-state");
+  if (saveState && payload.savedAt) saveState.textContent = "Серверт хадгалагдсан";
+  return payload;
 }
 
 function showToast(message) {
@@ -1979,6 +2071,18 @@ function setupEvents() {
   $("#export-project").addEventListener("click", exportJson);
   $("#export-survey").addEventListener("click", exportSurveyCsv);
   $("#print-report").addEventListener("click", () => window.print());
+  window.addEventListener("beforeunload", flushSharedStateBeforeUnload);
+}
+
+function flushSharedStateBeforeUnload() {
+  try {
+    saveLocalState();
+    const payload = JSON.stringify({ state });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(sharedStateApiPath, new Blob([payload], { type: "application/json" }));
+    }
+  } catch {
+  }
 }
 
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -2125,7 +2229,7 @@ async function loginWithEmail(event) {
   }
   if (!savedDigest) {
     state.access.passwords[email] = digest;
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    saveLocalState();
     showToast("Password хадгалагдлаа. Дараагийн удаа энэ password-оор нэвтэрнэ.");
   }
   state.access.currentEmail = email;
@@ -2142,13 +2246,18 @@ async function loginWithEmail(event) {
   renderReports();
 }
 
-buildCompetencyTable();
-renderRoleSwitcher();
-setupEvents();
-updateAnalysisModeUi();
-renderDashboard();
-renderPlan();
-renderEvidence();
-renderAnalysis();
-renderReports();
-applyAccessControl();
+initializeApp();
+
+async function initializeApp() {
+  setupEvents();
+  await hydrateSharedState();
+  buildCompetencyTable();
+  renderRoleSwitcher();
+  updateAnalysisModeUi();
+  renderDashboard();
+  renderPlan();
+  renderEvidence();
+  renderAnalysis();
+  renderReports();
+  applyAccessControl();
+}
