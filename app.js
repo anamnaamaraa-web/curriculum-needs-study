@@ -230,24 +230,18 @@ function persist(message = "Өөрчлөлт хадгалагдсан") {
 async function hydrateSharedState() {
   const saveState = $("#save-state");
   try {
-    const response = await fetch(sharedStateApiPath, {
-      method: "GET",
-      headers: { "Accept": "application/json" },
-      cache: "no-store"
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
+    const payload = await fetchSharedState();
     if (payload.state && typeof payload.state === "object") {
       const localState = state;
       const serverState = normalizeProjectState(payload.state);
-      if (stateActivityScore(localState) > stateActivityScore(serverState)) {
-        state = localState;
+      const mergedState = mergeProjectStates(serverState, localState);
+      state = mergedState;
+      saveLocalState();
+      if (stateActivityScore(localState) > stateActivityScore(serverState) || stateActivityScore(mergedState) !== stateActivityScore(serverState)) {
         await saveSharedStateNow();
         if (saveState) saveState.textContent = "Энэ browser-ийн өмнөх датаг сервер рүү шилжүүллээ";
         return;
       }
-      state = serverState;
-      saveLocalState();
       if (saveState) saveState.textContent = "Серверийн хадгалсан дата ачааллаа";
       return;
     }
@@ -257,6 +251,103 @@ async function hydrateSharedState() {
     if (saveState) saveState.textContent = "Сервертэй холбогдсонгүй · түр local хадгалалт ашиглаж байна";
     console.warn("Shared state load failed:", error);
   }
+}
+
+async function fetchSharedState() {
+  const response = await fetch(sharedStateApiPath, {
+    method: "GET",
+    headers: { "Accept": "application/json" },
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
+}
+
+async function refreshSharedStateForLogin() {
+  try {
+    const payload = await fetchSharedState();
+    if (payload.state && typeof payload.state === "object") {
+      state = mergeProjectStates(normalizeProjectState(payload.state), state);
+      saveLocalState();
+    }
+  } catch (error) {
+    console.warn("Shared state refresh before login failed:", error);
+  }
+}
+
+function mergeProjectStates(primaryState, secondaryState) {
+  const primary = normalizeProjectState(primaryState);
+  const secondary = normalizeProjectState(secondaryState);
+  return {
+    tasks: mergeTaskMap(primary.tasks, secondary.tasks),
+    programTasks: mergeProgramTasks(primary.programTasks, secondary.programTasks),
+    documents: mergeById(primary.documents, secondary.documents),
+    focusGroups: mergeById(primary.focusGroups, secondary.focusGroups),
+    comparisons: mergeById(primary.comparisons, secondary.comparisons),
+    surveys: mergeById(primary.surveys, secondary.surveys),
+    access: mergeAccess(primary.access, secondary.access),
+    serverMeta: primary.serverMeta || secondary.serverMeta || {}
+  };
+}
+
+function mergeTaskMap(primaryTasks = {}, secondaryTasks = {}) {
+  const merged = createTaskMap(primaryTasks);
+  taskDefinitions.forEach((task) => {
+    const localTask = secondaryTasks?.[task.code];
+    if (isMeaningfulTask(localTask)) merged[task.code] = { ...merged[task.code], ...localTask };
+  });
+  return merged;
+}
+
+function mergeProgramTasks(primaryProgramTasks = {}, secondaryProgramTasks = {}) {
+  return Object.fromEntries(programDefinitions.map((program) => [
+    program.id,
+    mergeTaskMap(primaryProgramTasks?.[program.id], secondaryProgramTasks?.[program.id])
+  ]));
+}
+
+function isMeaningfulTask(task) {
+  return Boolean(task && (task.status && task.status !== "not-started" || task.evidence || task.note));
+}
+
+function mergeById(primaryItems = [], secondaryItems = []) {
+  const map = new Map();
+  [...primaryItems, ...secondaryItems].forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const key = item.id || `${item.createdAt || item.submittedAt || ""}:${item.title || item.agency || item.country || ""}`;
+    if (!key) return;
+    map.set(key, { ...(map.get(key) || {}), ...item });
+  });
+  return [...map.values()];
+}
+
+function mergeAccess(primaryAccess = {}, secondaryAccess = {}) {
+  const primary = normalizeAccess(primaryAccess);
+  const secondary = normalizeAccess(secondaryAccess);
+  const users = mergeByEmail(primary.users, secondary.users);
+  return normalizeAccess({
+    ...primary,
+    adminEmail: primary.adminEmail || secondary.adminEmail,
+    roleViews: {
+      ...primary.roleViews,
+      ...secondary.roleViews
+    },
+    passwords: {
+      ...(primary.passwords || {}),
+      ...(secondary.passwords || {})
+    },
+    users
+  });
+}
+
+function mergeByEmail(primaryUsers = [], secondaryUsers = []) {
+  const map = new Map();
+  [...primaryUsers, ...secondaryUsers].forEach((user) => {
+    const email = normalizeEmail(user?.email);
+    if (!email) return;
+    map.set(email, { ...(map.get(email) || {}), ...user, email });
+  });
+  return [...map.values()];
 }
 
 function stateActivityScore(projectState) {
@@ -2247,6 +2338,7 @@ async function loginWithEmail(event) {
     return;
   }
   sessionStorage.setItem(sessionEmailKey, email);
+  await refreshSharedStateForLogin();
   state.access = normalizeAccess(state.access);
   const digest = await passwordDigest(email, password);
   const savedDigest = state.access.passwords?.[email];
