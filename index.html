@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#243237">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="mn_MN">
+  <meta property="og:title" content="Сургалтын хөтөлбөрийн хэрэгцээний судалгааны систем">
+  <meta property="og:description" content="Бодлогын баримт бичиг, фокус бүлэг, олон улсын харьцуулалт, чадамжийн шинжилгээний нэгдсэн орчин.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Сургалтын хөтөлбөрийн хэрэгцээний судалгааны систем">
+  <meta name="twitter:description" content="Судалгааны нотолгоонд тулгуурлан сургалтын хөтөлбөрийн шинэчлэлийн санал боловсруулах систем.">
+  <meta name="description" content="Сургалтын хөтөлбөрийн хэрэгцээ, бодлогын баримт бичиг, чадамжийн зөрүү болон судалгааны нотолгоог нэгтгэн боловсруулах ажлын систем.">
+  <title>Сургалтын хөтөлбөрийн хэрэгцээний судалгааны систем</title>
+  <script>
+    if (window.location.protocol === "file:") {
+      const localSite = new URL("http://127.0.0.1:4173/");
+      localSite.hash = window.location.hash;
+      window.location.replace(localSite.href);
+    }
+  </script>
+  <link rel="stylesheet" href="styles.css?v=20260707-password-login">
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Үндсэн агуулга руу шилжих</a>
+
+  <main class="access-landing" id="access-landing">
+    <section class="landing-hero">
+      <div>
+        <p class="eyebrow">АЖЛЫН ХЭСГИЙН НЭГДСЭН ОРЧИН</p>
+        <h1>Судалгаанаас шийдвэр хүртэл.</h1>
+        <p>Макро, мезо, микро түвшний нотолгоог нэгтгэн хөтөлбөрийн шинэчлэлийн саналыг боловсруулах ажлын систем.</p>
+      </div>
+      <form class="landing-login" id="landing-login-form">
+        <label>Сайт ашиглах мэйл хаяг
+          <input id="landing-email-input" type="email" autocomplete="email" placeholder="name@example.mn" required>
+        </label>
+        <label>Password
+          <input id="landing-password-input" type="password" autocomplete="current-password" placeholder="Password" minlength="4" required>
+        </label>
+        <button class="button primary" type="submit">Сайт руу нэвтрэх <span>→</span></button>
+        <small>Анх удаа энэ мэйлээр орох үед оруулсан password хадгалагдаж, дараагийн удаа тэр password-оор нэвтэрнэ.</small>
+      </form>
+    </section>
+
+    <section class="landing-alert">
+      <span class="alert-icon">!</span>
+      <div>
+        <strong>А/381 тушаалын хугацаагаар шинэчилсэн</strong>
+        <p>Судалгааны ажлыг 2026.07.03–2026.09.30 хүртэл зохион байгуулах бөгөөд үйл ажиллагааны төлөвлөгөө 2026.07.03–2026.09.29 хугацаагаар шинэчлэгдсэн.</p>
+      </div>
+      <span class="alert-tag">2026 төлөвлөгөө</span>
+    </section>
+
+    <section class="landing-grid">
+      <article class="landing-mission">
+        <p class="eyebrow">СУДАЛГААНЫ ЗОРИЛГО</p>
+        <h2>Хөтөлбөрийг төрийн бодлого, захиалагчийн эрэлт, алба хаагчийн бодит хэрэгцээнд нийцүүлэх.</h2>
+        <p>Хамрах хүрээ: Цагдаа, Хил хамгаалах, Шүүхийн шийдвэр гүйцэтгэх, Онцгой байдал, хууль сахиулах удирдлагын магистрын хөтөлбөрүүд.</p>
+        <div class="landing-level-box"><strong>3</strong><span>түвшин</span></div>
+      </article>
+      <aside class="landing-next">
+        <p class="eyebrow">АНХААРАХ АЖИЛ</p>
+        <h2>Дараагийн алхам</h2>
+        <div class="next-task"><span>1.1</span><div><strong>Ажлын хэсгийн хурал, ажлын төлөвлөгөө, үүрэг хуваарилалт батлах</strong><small>Хуралдааны тэмдэглэл, үүрэг хуваарилалт</small></div></div>
+        <div class="next-task"><span>1.2</span><div><strong>Судалгааны хэрэглэхүүн боловсруулах</strong><small>Асуулга загвар, ярилцлагын гид</small></div></div>
+        <div class="next-task"><span>1.3</span><div><strong>Захиалагч байгууллагуудын стратегийн баримт бичгүүд цуглуулах</strong><small>Баримт бичгийн шинжилгээний тайлан</small></div></div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#dashboard" data-view-target="dashboard">
+        <span class="brand-mark">СУ</span>
+        <span>
+          <strong>Стратегийн удирдлага</strong>
+          <small>Хэрэгцээний судалгаа</small>
+        </span>
+      </a>
+
+      <nav class="side-nav" aria-label="Үндсэн цэс">
+        <p>Ажлын орчин</p>
+        <button class="nav-item active" type="button" data-view-target="dashboard">
+          <span class="nav-icon">⌂</span>Хяналтын самбар
+        </button>
+        <button class="nav-item" type="button" data-view-target="plan">
+          <span class="nav-icon">✓</span>Үйл ажиллагааны төлөвлөгөө
+          <span class="nav-badge">18</span>
+        </button>
+        <button class="nav-item" type="button" data-view-target="tools">
+          <span class="nav-icon">⌕</span>Судалгааны хэрэгслүүд
+        </button>
+        <button class="nav-item" type="button" data-view-target="survey">
+          <span class="nav-icon">≡</span>Чадамжийн асуулга
+        </button>
+        <button class="nav-item" type="button" data-view-target="analysis">
+          <span class="nav-icon">↗</span>Нэгтгэл шинжилгээ
+        </button>
+        <button class="nav-item" type="button" data-view-target="reports">
+          <span class="nav-icon">▤</span>Гарах үр дүн, тайлан
+        </button>
+        <button class="nav-item" type="button" data-view-target="settings">
+          <span class="nav-icon">⚙</span>Эрхийн тохиргоо
+        </button>
+
+        <p>Лавлагаа</p>
+        <button class="nav-item" type="button" data-view-target="methodology">
+          <span class="nav-icon">i</span>Арга зүй ба чанарын хяналт
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <span class="status-dot"></span>
+        <div>
+          <strong>Локал prototype</strong>
+          <small>Өгөгдөл энэ төхөөрөмжид</small>
+        </div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <button class="menu-button" id="menu-button" type="button" aria-label="Цэс нээх" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="project-identity">
+          <span class="project-code">ТӨСӨЛ · СХС-01</span>
+          <strong>Стратегийн магистрын хөтөлбөрийн хэрэгцээ</strong>
+        </div>
+        <div class="top-actions">
+          <form class="email-login" id="email-login-form">
+            <label>Мэйл хаяг
+              <input id="current-email-input" type="email" autocomplete="email" placeholder="name@example.mn">
+            </label>
+            <label>Password
+              <input id="current-password-input" type="password" autocomplete="current-password" placeholder="Password">
+            </label>
+            <button class="button secondary" type="submit">Нэвтрэх</button>
+            <span class="role-badge" id="current-role-badge">Admin</span>
+          </form>
+          <span class="save-state" id="save-state">Өөрчлөлт хадгалагдсан</span>
+          <button class="avatar" type="button" title="Ажлын хэсэг">АХ</button>
+        </div>
+      </header>
+
+      <main id="workspace">
+        <section class="view active" id="dashboard" aria-labelledby="dashboard-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">АЖЛЫН ХЭСГИЙН НЭГДСЭН ОРЧИН</p>
+              <h1 id="dashboard-title">Судалгаанаас шийдвэр хүртэл.</h1>
+              <p>Макро, мезо, микро түвшний нотолгоог нэгтгэн хөтөлбөрийн шинэчлэлийн саналыг боловсруулах ажлын систем.</p>
+            </div>
+            <button class="button primary" type="button" data-view-target="plan">Өнөөдрийн ажлыг харах <span>→</span></button>
+          </div>
+
+          <div class="schedule-alert">
+            <span class="alert-icon">!</span>
+            <div>
+              <strong>А/381 тушаалын хугацаагаар шинэчилсэн</strong>
+              <p>А/381 дугаар тушаалд судалгааны ажлыг 2026.07.03–2026.09.30 хүртэл зохион байгуулахаар заасан. Үйл ажиллагааны төлөвлөгөөг хавсралтын 2026.07.03–2026.09.29 хугацаагаар шинэчилсэн.</p>
+            </div>
+            <span class="alert-tag">2026 төлөвлөгөө</span>
+          </div>
+
+          <div class="dashboard-layout">
+            <div class="dashboard-primary">
+              <article class="mission-card">
+                <div class="mission-copy">
+                  <p class="eyebrow light">СУДАЛГААНЫ ЗОРИЛГО</p>
+                  <h2>Хөтөлбөрийг төрийн бодлого, захиалагчийн эрэлт, алба хаагчийн бодит хэрэгцээнд нийцүүлэх.</h2>
+                  <p>Хамрах хүрээ: Цагдаа, Хил хамгаалах, Шүүхийн шийдвэр гүйцэтгэх, Онцгой байдал, хууль сахиулах удирдлагын магистрын хөтөлбөрүүд.</p>
+                </div>
+                <div class="mission-orbit" aria-label="Судалгааны гурван түвшин">
+                  <span class="orbit-label macro">Макро</span>
+                  <span class="orbit-label meso">Мезо</span>
+                  <span class="orbit-label micro">Микро</span>
+                  <div class="orbit-core"><strong>3</strong><span>түвшин</span></div>
+                </div>
+              </article>
+
+              <div class="metric-grid">
+                <article class="metric">
+                  <span class="metric-label">Нийт гүйцэтгэл</span>
+                  <strong id="metric-progress">0%</strong>
+                  <div class="mini-progress"><i id="metric-progress-bar"></i></div>
+                </article>
+                <article class="metric">
+                  <span class="metric-label">Бүрдүүлсэн нотолгоо</span>
+                  <strong id="metric-evidence">0</strong>
+                  <small>баримт, ярилцлага, харьцуулалт</small>
+                </article>
+                <article class="metric">
+                  <span class="metric-label">Асуулгын хариулт</span>
+                  <strong id="metric-responses">0</strong>
+                  <small>зорилт: суралцагчид + n≥50</small>
+                </article>
+              </div>
+
+              <section class="section-block">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">4 ҮЕ ШАТ</p>
+                    <h2>Судалгааны ажлын урсгал</h2>
+                  </div>
+                  <button class="text-button" type="button" data-view-target="plan">Бүх ажлыг харах →</button>
+                </div>
+                <div class="phase-grid" id="phase-grid"></div>
+              </section>
+            </div>
+
+            <aside class="dashboard-side">
+              <article class="side-panel">
+                <div class="section-heading compact">
+                  <div>
+                    <p class="eyebrow">АНХААРАХ АЖИЛ</p>
+                    <h2>Дараагийн алхам</h2>
+                  </div>
+                </div>
+                <div id="next-tasks" class="next-tasks"></div>
+              </article>
+
+              <article class="side-panel output-panel">
+                <div class="section-heading compact">
+                  <div>
+                    <p class="eyebrow">ЭЦСИЙН ГАРАЛТ</p>
+                    <h2>Шийдвэрийн багц</h2>
+                  </div>
+                </div>
+                <ul>
+                  <li><span>01</span>Нэгтгэл шинжилгээний тайлан</li>
+                  <li><span>02</span>Хичээл, кредит, агуулгын санал</li>
+                  <li><span>03</span>Эцсийн судалгааны тайлан</li>
+                  <li><span>04</span>Батлагдсан шийдвэр, тэмдэглэл</li>
+                </ul>
+                <button class="button secondary full" type="button" data-view-target="reports">Гаралтын бэлэн байдлыг шалгах</button>
+              </article>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="plan" aria-labelledby="plan-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">УДИРДАМЖИЙН 3.1–3.4</p>
+              <h1 id="plan-title">Үйл ажиллагааны төлөвлөгөө</h1>
+              <p>18 ажлын төлөв, хариуцагч, нотлох баримтыг нэг бүрчлэн хөтөлнө.</p>
+            </div>
+            <div class="head-actions">
+              <label class="select-compact">Хөтөлбөр
+                <select id="program-filter">
+                  <option value="all">Бүх хөтөлбөр</option>
+                  <option value="police">Цагдаагийн стратеги</option>
+                  <option value="border">Хилийн стратеги</option>
+                  <option value="corrections">Шүүхийн шийдвэр гүйцэтгэлийн стратеги</option>
+                  <option value="emergency">Онцгой байдлын стратеги</option>
+                </select>
+              </label>
+              <label class="select-compact">Үе шат
+                <select id="phase-filter">
+                  <option value="all">Бүгд</option>
+                  <option value="1">I · Бэлтгэл ба макро</option>
+                  <option value="2">II · Үйл ажиллагаа</option>
+                  <option value="3">III · Хувь хүн</option>
+                  <option value="4">IV · Нэгтгэл, тайлан</option>
+                </select>
+              </label>
+              <label class="select-compact">Төлөв
+                <select id="status-filter">
+                  <option value="all">Бүгд</option>
+                  <option value="not-started">Эхлээгүй</option>
+                  <option value="in-progress">Хийгдэж байна</option>
+                  <option value="review">Хяналтад</option>
+                  <option value="done">Дууссан</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="plan-summary">
+            <div><span>Нийт ажил</span><strong>18</strong></div>
+            <div><span>Дууссан</span><strong id="done-count">0</strong></div>
+            <div><span>Хийгдэж буй</span><strong id="active-count">0</strong></div>
+            <div class="progress-summary"><span>Гүйцэтгэл</span><strong id="plan-progress">0%</strong><div class="mini-progress"><i id="plan-progress-bar"></i></div></div>
+          </div>
+
+          <div class="program-progress-grid" id="program-progress-grid" aria-label="Хөтөлбөр тус бүрийн гүйцэтгэл"></div>
+
+          <div class="task-list" id="task-list"></div>
+        </section>
+
+        <section class="view" id="tools" aria-labelledby="tools-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">МАКРО + МЕЗО НОТОЛГОО</p>
+              <h1 id="tools-title">Судалгааны хэрэгслүүд</h1>
+              <p>Баримт бичиг, фокус бүлэг, ижил төстэй хөтөлбөрийн нотолгоог стандарт бүтэцтэй бүртгэнэ.</p>
+            </div>
+          </div>
+
+          <div class="tool-tabs" role="tablist" aria-label="Судалгааны хэрэгсэл">
+            <button class="tool-tab active" type="button" data-tool-tab="documents">Баримт бичгийн шинжилгээ</button>
+            <button class="tool-tab" type="button" data-tool-tab="focus">Фокус бүлэг</button>
+            <button class="tool-tab" type="button" data-tool-tab="comparison">Олон улсын харьцуулалт</button>
+          </div>
+
+          <div class="tool-pane active" id="tool-documents">
+            <div class="analysis-workflow" aria-label="Баримт бичгийн шинжилгээний үе шат">
+              <div class="workflow-step active"><span>01</span><div><strong>Баримт оруулах</strong><small>PDF, TXT эсвэл эх текст</small></div></div>
+              <div class="workflow-line"></div>
+              <div class="workflow-step"><span>02</span><div><strong>Заалт кодлох</strong><small>Түлхүүр өгүүлбэр илрүүлэх</small></div></div>
+              <div class="workflow-line"></div>
+              <div class="workflow-step"><span>03</span><div><strong>Чадамж батлах</strong><small>Судлаачийн хяналт</small></div></div>
+              <div class="workflow-line"></div>
+              <div class="workflow-step"><span>04</span><div><strong>Нэгтгэн эрэмбэлэх</strong><small>Олон баримтын давтамж</small></div></div>
+            </div>
+
+            <div class="document-analysis-layout">
+              <div class="analysis-input-column">
+                <form class="data-form document-analysis-form" id="document-form">
+                  <div class="form-title"><span>М</span><div><h2>Бодлого, стратегийн баримтын шинжилгээ</h2><p>Энгийн эсвэл нарийвчилсан горимоор шаардлагатай чадамж, нотлох ишлэл, суралцахуйн үр дүнг гаргана.</p></div></div>
+
+                  <section class="program-context-panel" aria-labelledby="program-context-title">
+                    <div class="program-context-head">
+                      <span>01</span>
+                      <div>
+                        <p class="eyebrow">ШИНЖИЛГЭЭНИЙ КОНТЕКСТ</p>
+                        <h3 id="program-context-title">Сургалтын хөтөлбөрийн мэдээлэл</h3>
+                        <p>Эдгээр мэдээллээр бодлогын баримтаас зөвхөн тухайн хөтөлбөрт хамаарах чадамжийг сонгож, эрэмбэлнэ.</p>
+                      </div>
+                    </div>
+                    <div class="program-context-grid">
+                      <label class="span-two">Сургалтын хөтөлбөрийн нэр
+                        <input name="programName" maxlength="300" required placeholder="Жишээ: Стратегийн удирдлагын магистрын хөтөлбөр">
+                      </label>
+                      <label>Сургалтын хөтөлбөрийн түвшин
+                        <select name="programLevel" required>
+                          <option value="">Сонгоно уу</option>
+                          <option value="certificate">Богино хугацааны / сертификат</option>
+                          <option value="bachelor">Бакалавр</option>
+                          <option value="master">Магистр</option>
+                          <option value="doctorate">Доктор</option>
+                          <option value="professional">Мэргэжил дээшлүүлэх</option>
+                          <option value="other">Бусад</option>
+                        </select>
+                      </label>
+                      <label>Сургалтын хөтөлбөрийн зорилтот бүлэг
+                        <textarea name="targetGroup" rows="3" maxlength="500" required placeholder="Жишээ: Хууль сахиулах байгууллагын дунд, ахлах шатны удирдах албан тушаалтан"></textarea>
+                      </label>
+                    </div>
+                    <p class="program-context-note"><span>i</span> Хөтөлбөрийн мэдээлэл нь хамаарлыг тодорхойлно. Чадамжийн нотолгоог зөвхөн оруулсан бодлогын баримт бичгийн заалтаас авна.</p>
+                  </section>
+
+                  <label class="file-drop" for="policy-file">
+                    <input id="policy-file" name="file" type="file" accept=".pdf,.txt,.md">
+                    <span class="file-icon">⇧</span>
+                    <span><strong id="file-label">PDF эсвэл TXT баримт сонгох</strong><small>PDF/TXT-ийн текст болон илэрсэн мета мэдээллийг автоматаар нөхнө. DOCX-ийн холбогдох заалтыг доорх талбарт хуулна.</small></span>
+                    <span class="file-action">Файл сонгох</span>
+                  </label>
+                  <div class="extraction-status" id="extraction-status" hidden></div>
+
+                  <div class="field-grid">
+                    <label class="span-two">Баримт бичгийн нэр<input name="title" required placeholder="Бодлого, стратеги, стандартын нэр"></label>
+                    <label>Гаргасан байгууллага<input name="organization" required placeholder="Яам, агентлаг, байгууллага"></label>
+                    <label>Батлагдсан он<input name="year" type="number" min="1900" max="2100" required></label>
+                    <label>Эх сурвалжийн төрөл
+                      <select name="quality" required>
+                        <option value="">Сонгоно уу</option>
+                        <option value="official">Албан ёсны анхдагч эх сурвалж</option>
+                        <option value="peer-reviewed">Хянан магадалсан судалгаа</option>
+                      </select>
+                    </label>
+                    <label>Хамаарах байгууллага
+                      <select name="agency" required>
+                        <option value="">Сонгоно уу</option>
+                        <option>Цагдаа</option><option>Хил хамгаалах</option><option>Шүүхийн шийдвэр гүйцэтгэх</option>
+                        <option>Онцгой байдал</option><option>Салбар дундын</option>
+                      </select>
+                    </label>
+                    <label class="span-two">Албан ёсны холбоос<input name="url" type="url" required placeholder="https://..."></label>
+                    <label>Шинжилгээ хийсэн судлаач<input name="analyst" required placeholder="Нэр эсвэл судлаачийн код"></label>
+                    <label>Баримтын хувилбар / дугаар<input name="version" placeholder="Тушаалын дугаар, хувилбар"></label>
+                    <label class="span-two">Шинжилгээний текст
+                      <textarea id="source-text" name="sourceText" rows="9" required placeholder="PDF/TXT сонгоход текст энд автоматаар орно. Эсвэл чадамжид хамаарах зорилго, зорилт, хэрэгжүүлэх арга хэмжээ, үр дүнгийн заалтыг хуулна."></textarea>
+                      <small class="field-help"><span id="source-char-count">0</span> тэмдэгт · Эх заалтыг өөрчлөлгүй хадгална.</small>
+                    </label>
+                  </div>
+
+                  <fieldset class="analysis-mode-picker">
+                    <legend>Шинжилгээний горим</legend>
+                    <label class="analysis-mode-card">
+                      <input type="radio" name="analysisMode" value="local" checked>
+                      <span class="analysis-mode-copy">
+                        <span class="analysis-mode-title"><strong>Энгийн шинжилгээ</strong><em>ҮНЭГҮЙ</em></span>
+                        <small>API кредит шаардахгүй. Бүтэн өгүүлбэрийн ойлголт, үйлдэл, үр дүн, үгүйсгэлийг хамтад нь үнэлнэ.</small>
+                      </span>
+                    </label>
+                    <label class="analysis-mode-card">
+                      <input type="radio" name="analysisMode" value="openai">
+                      <span class="analysis-mode-copy">
+                        <span class="analysis-mode-title"><strong>Нарийвчилсан шинжилгээ</strong><em>API</em></span>
+                        <small>Утга зүйн дэлгэрэнгүй шинжилгээ хийнэ. API кредит болон интернэт холболт шаардлагатай.</small>
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  <div class="analysis-actions">
+                    <p id="analysis-mode-description"><strong>Энгийн шинжилгээ:</strong> нэг бүтэн өгүүлбэр дэх ойлголт, хийх үйлдэл, зорилго, үр дүн, үгүйсгэлийг хамтад нь үнэлнэ. Судлаач заавал хянан батална.</p>
+                    <button class="button primary ai-button" id="analyze-document" type="button">
+                      <span class="ai-spark">✦</span><span class="button-label">Энгийн шинжилгээ</span><span>→</span>
+                    </button>
+                  </div>
+
+                  <section class="candidate-panel" id="candidate-panel" hidden>
+                    <div class="candidate-heading">
+                      <div><p class="eyebrow" id="candidate-method-label">ӨГҮҮЛБЭРИЙН КОНТЕКСТ · СУДЛААЧИЙН ХЯНАЛТ ШААРДЛАГАТАЙ</p><h3>Илэрсэн чадамжууд</h3></div>
+                      <span class="count-pill" id="candidate-count">0</span>
+                    </div>
+                    <div class="ai-analysis-error" id="ai-analysis-error" hidden></div>
+                    <div class="ai-result-summary" id="ai-result-summary" hidden>
+                      <div><span>БАРИМТЫН ТОВЧ УТГА</span><p id="ai-document-summary"></p></div>
+                      <div id="ai-limitations-wrap"><span>ШИНЖИЛГЭЭНИЙ ХЯЗГААРЛАЛТ</span><ul id="ai-limitations"></ul></div>
+                    </div>
+                    <div class="candidate-list" id="candidate-list"></div>
+                    <div class="manual-competency">
+                      <input id="manual-competency-name" placeholder="Жагсаалтад байхгүй чадамж нэмэх">
+                      <button class="button secondary" id="add-manual-competency" type="button">+ Нэмэх</button>
+                    </div>
+                    <div class="validation-check">
+                      <label><input id="coding-confirmed" type="checkbox"><span>Эх заалттай тулган шалгаж, сонгосон чадамжуудыг баталгаажуулсан.</span></label>
+                    </div>
+                    <button class="button primary full" id="save-document-analysis" type="submit">Шинжилгээний үр дүнг хадгалах</button>
+                  </section>
+                </form>
+              </div>
+
+              <aside class="analysis-output-column">
+                <div class="output-tabs" role="tablist" aria-label="Шинжилгээний үр дүн">
+                  <button class="output-tab active" type="button" data-output-tab="documents">Баримтууд <span id="document-count">0</span></button>
+                  <button class="output-tab" type="button" data-output-tab="competencies">Нэгдсэн чадамж <span id="competency-count">0</span></button>
+                </div>
+                <section class="output-pane active" id="output-documents">
+                  <div class="output-pane-head"><div><p class="eyebrow">БҮРТГЭЛ</p><h2>Шинжилсэн баримтууд</h2></div></div>
+                  <div class="evidence-list document-evidence-list" id="document-list"></div>
+                </section>
+                <section class="output-pane" id="output-competencies">
+                  <div class="output-pane-head">
+                    <div><p class="eyebrow">НЭГТГЭСЭН ҮР ДҮН</p><h2>Шаардлагатай чадамжийн жагсаалт</h2></div>
+                    <div class="output-pane-actions">
+                      <label class="agency-filter">Хамаарах байгууллага
+                        <select id="competency-agency-filter">
+                          <option value="">Бүх байгууллага</option>
+                        </select>
+                      </label>
+                      <button class="text-button" id="export-document-competencies" type="button">CSV татах</button>
+                    </div>
+                  </div>
+                  <div class="aggregation-rule"><span>i</span><p id="aggregation-rule-text">Олон баримтад давтагдсан, олон байгууллагад хамаарсан чадамжийг эхэнд эрэмбэлнэ.</p></div>
+                  <section class="coverage-checker" aria-labelledby="coverage-checker-title">
+                    <div class="coverage-checker-head">
+                      <span>Х</span>
+                      <div>
+                        <p class="eyebrow">ХӨТӨЛБӨРИЙН ХАМРАХ БАЙДАЛ</p>
+                        <h3 id="coverage-checker-title">Чадамж тусгасан эсэхийг шалгах</h3>
+                        <p>Сургалтын хөтөлбөрийг оруулж, дээрх шаардлагатай чадамж бүр туссан эсэхийг эх заалттай нь харьцуулна.</p>
+                      </div>
+                    </div>
+                    <label class="coverage-file-drop" for="curriculum-coverage-file">
+                      <input id="curriculum-coverage-file" type="file" accept=".pdf,.txt,.md">
+                      <span>⇧</span>
+                      <div><strong id="curriculum-coverage-file-label">PDF эсвэл TXT хөтөлбөр сонгох</strong><small>Файлын текст зөвхөн төхөөрөмж дээр боловсруулагдана.</small></div>
+                    </label>
+                    <div class="coverage-file-status" id="curriculum-coverage-status" hidden></div>
+                    <label class="coverage-text-label">Эсвэл сургалтын хөтөлбөрийн текстийг хуулна
+                      <textarea id="curriculum-coverage-text" rows="6" placeholder="Хичээлийн зорилго, агуулга, суралцахуйн үр дүн, чадамжийн заалтыг энд оруулна."></textarea>
+                      <small><span id="curriculum-coverage-char-count">0</span> тэмдэгт</small>
+                    </label>
+                    <div class="coverage-actions">
+                      <button class="button primary" id="analyze-curriculum-coverage" type="button">Хамрах байдлыг шалгах</button>
+                      <button class="text-button" id="export-curriculum-coverage" type="button" hidden>CSV татах</button>
+                    </div>
+                    <div class="coverage-summary" id="coverage-summary" hidden>
+                      <div><span>Тусгасан</span><strong id="coverage-covered-count">0</strong></div>
+                      <div><span>Хэсэгчлэн</span><strong id="coverage-partial-count">0</strong></div>
+                      <div><span>Илрээгүй</span><strong id="coverage-missing-count">0</strong></div>
+                    </div>
+                    <p class="coverage-caution" id="coverage-caution" hidden>Автомат өгүүлбэрийн контекстийн үнэлгээ тул үр дүнг хөтөлбөрийн эксперт эх заалттай тулган баталгаажуулна.</p>
+                    <div class="coverage-results" id="coverage-results"></div>
+                  </section>
+                  <div class="aggregated-competencies" id="aggregated-competency-list"></div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <div class="tool-pane" id="tool-focus">
+            <div class="tool-layout">
+              <form class="data-form" id="focus-form">
+                <div class="form-title"><span>З</span><div><h2>Захиалагчийн фокус бүлэг</h2><p>Дээд удирдлагын ярилцлагын бүтэц, гол үр дүн.</p></div></div>
+                <div class="field-grid">
+                  <label>Байгууллага
+                    <select name="agency" required>
+                      <option value="">Сонгоно уу</option>
+                      <option>Цагдаагийн ерөнхий газар</option><option>Хил хамгаалах ерөнхий газар</option>
+                      <option>Шүүхийн шийдвэр гүйцэтгэх байгууллага</option><option>Онцгой байдлын ерөнхий газар</option>
+                    </select>
+                  </label>
+                  <label>Огноо<input name="date" type="date" required></label>
+                  <label>Оролцогчдын тоо<input name="participants" type="number" min="1" max="50" required></label>
+                  <label>Хөтлөгч / баг<input name="facilitator" required placeholder="Ярилцлагын баг"></label>
+                  <label class="span-two">Ирээдүйн удирдах албан тушаалтанд дутагдаж буй чадвар<textarea name="gaps" rows="3" required></textarea></label>
+                  <label class="span-two">Нотлох ишлэл эсвэл тэмдэглэлийн код<textarea name="evidence" rows="3" required placeholder="Нэргүй код, мөр/хуудсын лавлагаа"></textarea></label>
+                </div>
+                <button class="button primary" type="submit">Ярилцлага бүртгэх</button>
+              </form>
+              <div class="evidence-panel">
+                <div class="section-heading compact"><div><p class="eyebrow">БҮРТГЭЛ</p><h2>Фокус бүлгүүд</h2></div><span class="count-pill" id="focus-count">0</span></div>
+                <div class="evidence-list" id="focus-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tool-pane" id="tool-comparison">
+            <div class="tool-layout">
+              <form class="data-form" id="comparison-form">
+                <div class="form-title"><span>О</span><div><h2>Олон улсын хөтөлбөр</h2><p>Зөвхөн байгууллагын албан ёсны хөтөлбөрийн мэдээлэл.</p></div></div>
+                <div class="field-grid">
+                  <label>Улс<input name="country" required></label>
+                  <label>Сургууль / агентлаг<input name="institution" required></label>
+                  <label class="span-two">Хөтөлбөрийн нэр<input name="program" required></label>
+                  <label>Нийт кредит<input name="credits" required placeholder="Жишээ: 120 ECTS"></label>
+                  <label>Сургалтын хэлбэр<input name="format" required placeholder="Танхим, хосолсон..."></label>
+                  <label class="span-two">Албан ёсны холбоос<input name="url" type="url" required placeholder="https://..."></label>
+                  <label class="span-two">Төгсөгчийн гол чадамж<textarea name="competencies" rows="3" required></textarea></label>
+                </div>
+                <button class="button primary" type="submit">Хөтөлбөр бүртгэх</button>
+              </form>
+              <div class="evidence-panel">
+                <div class="section-heading compact"><div><p class="eyebrow">МАТРИЦ</p><h2>Харьцуулах хөтөлбөрүүд</h2></div><span class="count-pill" id="comparison-count">0</span></div>
+                <div class="evidence-list" id="comparison-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="survey" aria-labelledby="survey-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">МИКРО ТҮВШИН · SKILL GAP</p>
+              <h1 id="survey-title">Чадамжийн хэрэгцээний асуулга</h1>
+              <p>Одоогийн магистрын суралцагч болон захиалагч байгууллагын дунд шатны удирдлагын үнэлгээг цуглуулна.</p>
+            </div>
+            <div class="survey-target">
+              <span>Зорилтот түүвэр</span>
+              <strong>Бүх суралцагч + n≥50</strong>
+            </div>
+          </div>
+
+          <form id="survey-form" class="survey-card" novalidate>
+            <div class="survey-intro">
+              <span class="step-badge">01</span>
+              <div><h2>Оролцогчийн ангилал</h2><p>Хувь хүнийг таних мэдээлэл авахгүй.</p></div>
+            </div>
+            <div class="choice-grid">
+              <label class="choice"><input type="radio" name="stakeholder" value="Магистрын суралцагч" required><span>Магистрын суралцагч</span></label>
+              <label class="choice"><input type="radio" name="stakeholder" value="Дунд шатны удирдлага"><span>Дунд шатны удирдлага</span></label>
+              <label class="choice"><input type="radio" name="stakeholder" value="Дээд удирдлага"><span>Дээд удирдлага</span></label>
+              <label class="choice"><input type="radio" name="stakeholder" value="Сургалт, хүний нөөц"><span>Сургалт, хүний нөөц</span></label>
+              <label class="choice"><input type="radio" name="stakeholder" value="Багш, судлаач"><span>Багш, судлаач</span></label>
+            </div>
+            <div class="field-grid survey-fields">
+              <label>Байгууллага
+                <select name="agency" required>
+                  <option value="">Сонгоно уу</option><option>Цагдаа</option><option>Хил хамгаалах</option>
+                  <option>Шүүхийн шийдвэр гүйцэтгэх</option><option>Онцгой байдал</option><option>ДХИС</option><option>Бусад</option>
+                </select>
+              </label>
+              <label>Удирдах ажил / салбарт ажилласан хугацаа
+                <select name="experience" required>
+                  <option value="">Сонгоно уу</option><option>1 жилээс бага</option><option>1–3 жил</option>
+                  <option>4–7 жил</option><option>8–12 жил</option><option>13+ жил</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="survey-divider"></div>
+            <div class="survey-intro">
+              <span class="step-badge">02</span>
+              <div><h2>Стратегийн удирдлагын чадамж</h2><p>1 = маш бага, 5 = маш өндөр. Баримт бичгийн шинжилгээгээр баталгаажсан нэгдсэн чадамжууд энэ хүснэгтэд автоматаар нэмэгдэнэ.</p></div>
+            </div>
+            <div class="competency-table" id="competency-table">
+              <div class="competency-head"><span>Чадамж</span><span>Одоогийн түвшин</span><span>Ирээдүйн чухалчлал</span></div>
+            </div>
+
+            <label class="comment-field">Нэмэлт санал<textarea name="comment" rows="3" maxlength="500" placeholder="Хөтөлбөрт зайлшгүй тусгах мэдлэг, чадвар..."></textarea></label>
+            <label class="consent"><input type="checkbox" name="consent" required><span>Хариултыг нэргүй, нэгтгэсэн судалгаанд ашиглуулахыг зөвшөөрч байна.</span></label>
+            <div class="form-end">
+              <p class="form-error" id="survey-error" role="alert"></p>
+              <button class="button primary" type="submit">Хариулт бүртгэх</button>
+            </div>
+          </form>
+          <div class="success-card" id="survey-success" hidden>
+            <span>✓</span><div><h2>Хариулт бүртгэгдлээ</h2><p>Нэгтгэл шинжилгээнд автоматаар орсон.</p></div>
+            <button class="button secondary" type="button" data-view-target="analysis">Шинжилгээг харах</button>
+          </div>
+        </section>
+
+        <section class="view" id="analysis" aria-labelledby="analysis-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">МАКРО + МЕЗО + МИКРО</p>
+              <h1 id="analysis-title">Нэгтгэл шинжилгээ</h1>
+              <p>Гурван түвшний нотолгоог тусад нь харуулж, дараа нь давхцсан хэрэгцээг шийдвэрийн эрэмбэд оруулна.</p>
+            </div>
+            <button class="button secondary" id="export-survey" type="button">Асуулгын CSV татах</button>
+          </div>
+
+          <div class="level-metrics">
+            <article><span class="level-code">МАКРО</span><strong id="analysis-docs">0</strong><p>бодлого, стратеги, стандарт</p></article>
+            <article><span class="level-code">МЕЗО</span><strong id="analysis-focus">0</strong><p>фокус бүлгийн ярилцлага</p></article>
+            <article><span class="level-code">МИКРО</span><strong id="analysis-surveys">0</strong><p>чадамжийн асуулга</p></article>
+            <article class="accent"><span class="level-code">ХАРЬЦУУЛАЛТ</span><strong id="analysis-comparisons">0</strong><p>олон улсын хөтөлбөр</p></article>
+          </div>
+
+          <div class="analysis-grid">
+            <article class="analysis-panel span-two">
+              <div class="section-heading">
+                <div><p class="eyebrow">УР ЧАДВАРЫН ЗӨРҮҮ</p><h2>Чадамжийн шинэчлэлийн эрэмбэ</h2></div>
+                <div class="chart-key"><span><i class="current-key"></i>Одоогийн</span><span><i class="importance-key"></i>Чухалчлал</span></div>
+              </div>
+              <div class="needs-chart" id="needs-chart"></div>
+            </article>
+            <article class="analysis-panel">
+              <div class="section-heading compact"><div><p class="eyebrow">ТҮҮВРИЙН БҮТЭЦ</p><h2>Оролцогч тал</h2></div></div>
+              <div class="distribution-list" id="stakeholder-distribution"></div>
+            </article>
+            <article class="analysis-panel">
+              <div class="section-heading compact"><div><p class="eyebrow">ЭХ СУРВАЛЖИЙН ЧАНАР</p><h2>Зөвшөөрөгдсөн эх сурвалж</h2></div></div>
+              <div class="quality-stat"><strong id="quality-rate">—</strong><span>албан ёсны / хянан магадалсан</span></div>
+              <p class="panel-note">Албан бус эх сурвалж бүртгэх боломжгүйгээр тохируулсан.</p>
+            </article>
+          </div>
+
+          <div class="interpretation-note">
+            <strong>Тайлбарлах дүрэм</strong>
+            <p>n хүрээгүй, төлөөлөл тэнцвэргүй эсвэл “мэдэхгүй” хариулт их үед үр дүнг нийт олонлогт ерөнхийлөхгүй. Зөрүү нь шийдвэрийн цорын ганц шалгуур биш; макро ба мезо нотолгоотой давхар баталгаажуулна.</p>
+          </div>
+        </section>
+
+        <section class="view" id="reports" aria-labelledby="reports-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">УДИРДАМЖИД ЗААСАН ГАРАЛТ</p>
+              <h1 id="reports-title">Гарах үр дүн ба тайлан</h1>
+              <p>Ажил тус бүрийн нотолгооноос тайлангийн бэлэн байдлыг хянана.</p>
+            </div>
+            <div class="head-actions">
+              <button class="button secondary" id="export-project" type="button">Төслийн JSON татах</button>
+              <button class="button primary" id="print-report" type="button">Хураангуй хэвлэх</button>
+            </div>
+          </div>
+
+          <div class="report-readiness">
+            <div class="readiness-score"><span>Бэлэн байдал</span><strong id="report-readiness">0%</strong><div class="ring-progress" id="readiness-ring"></div></div>
+            <div>
+              <h2>Шийдвэр гаргалтын багц</h2>
+              <p>“Дууссан” төлөв болон холбогдох нотолгооны бүртгэлээр автоматаар тооцно.</p>
+            </div>
+          </div>
+
+          <div class="deliverable-list" id="deliverable-list"></div>
+
+          <div class="report-guardrail">
+            <div><p class="eyebrow">ЭЦСИЙН ХЯНАЛТ</p><h2>Тайланд заавал тусгах зүйлс</h2></div>
+            <ul>
+              <li>Судалгааны хамрах хүрээ, түүврийн хүрээ ба хариултын хувь</li>
+              <li>Эх сурвалжийн сонголтын шалгуур, огноо, албан ёсны холбоос</li>
+              <li>Зөрүүтэй болон нийцсэн нотолгоог хоёуланг нь тайлбарлах</li>
+              <li>Хязгаарлалт, тодорхойгүй байдал, ерөнхийлөх боломжийн хил</li>
+              <li>Санал бүрийг эх нотолгоо болон тооцоололтой холбох</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="view" id="settings" aria-labelledby="settings-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">ADMIN · ХАНДАЛТЫН ТОХИРГОО</p>
+              <h1 id="settings-title">Хэрэглэгчийн харах хэсгийн тохиргоо</h1>
+              <p>Admin хэрэглэгч бүх хэсгийг харна. Бусад хэрэглэгчийн цэсэнд ямар хэсэг харагдахыг эндээс сонгон хадгална.</p>
+            </div>
+            <div class="head-actions">
+              <button class="button secondary" id="access-reset-default" type="button">Үндсэн тохиргоо</button>
+              <button class="button secondary" id="access-grant-all" type="button">Бүгдийг нээх</button>
+            </div>
+          </div>
+
+          <form id="access-settings-form" class="access-settings-card">
+            <div class="access-settings-head">
+              <div>
+                <p class="eyebrow">EMAIL-BASED VIEW ACCESS</p>
+                <h2>Мэйл хаягаар ашиглах эрх олгох</h2>
+                <p id="access-summary">Dashboard бүх хэрэглэгчид нээлттэй.</p>
+              </div>
+              <button class="button primary" type="submit">Эрхийн тохиргоо хадгалах</button>
+            </div>
+            <div class="admin-email-panel">
+              <label>Admin мэйл хаяг
+                <input id="admin-email-input" type="email" placeholder="admin@local.mn" required>
+              </label>
+              <p>Энэ мэйлээр нэвтэрсэн хэрэглэгч бүх хэсэг болон эрхийн тохиргоог харна.</p>
+            </div>
+            <div class="access-role-grid" id="access-user-panels"></div>
+          </form>
+
+          <form id="access-user-form" class="access-settings-card user-access-form">
+            <div class="access-settings-head">
+              <div>
+                <p class="eyebrow">USER ACCESS</p>
+                <h2>Хэрэглэгч нэмэх / засах</h2>
+                <p>Хэрэглэгчийн мэйл хаяг, role, харах боломжтой хэсгийг сонгоно.</p>
+              </div>
+              <div class="head-actions">
+                <button class="button secondary" id="access-user-default" type="button">Role default</button>
+                <button class="button secondary" id="access-user-all" type="button">Бүх хэсэг</button>
+                <button class="button primary" type="submit">Хэрэглэгч хадгалах</button>
+              </div>
+            </div>
+            <div class="user-access-fields">
+              <label>Хэрэглэгчийн мэйл
+                <input id="access-user-email" type="email" placeholder="user@example.mn" required>
+              </label>
+              <label>Role
+                <select id="access-user-role"></select>
+              </label>
+            </div>
+            <div class="access-check-grid user-view-grid" id="access-user-view-grid"></div>
+            <div class="access-subhead">
+              <p class="eyebrow">PROGRAM ACCESS</p>
+              <h2>Хөтөлбөрөөр ангилж харах эрх</h2>
+              <p>Энэ хэрэглэгч аль хөтөлбөрийн төлөвлөгөө, баримт бичиг, чадамжийн нэгтгэлийг харахыг сонгоно.</p>
+            </div>
+            <div class="access-check-grid user-view-grid" id="access-user-program-grid"></div>
+          </form>
+
+          <div class="interpretation-note">
+            <strong>Тайлбар</strong>
+            <p>Энэ нь локал prototype-ийн дэлгэцийн түвшний эрхийн тохиргоо. Бодит серверийн нэвтрэлттэй холбох үед мэйл хаяг дээр хадгалсан role/view дүрмийг backend authorization болгон өргөтгөнө.</p>
+          </div>
+        </section>
+
+        <section class="view" id="methodology" aria-labelledby="methodology-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">УДИРДАМЖИД ЗААСАН СУДАЛГААНЫ ЛОГИК</p>
+              <h1 id="methodology-title">Гурван түвшний хэрэгцээний шинжилгээ</h1>
+              <p>Байгууллага, үйл ажиллагаа, хувь хүний түвшний мэдээллийг тусад нь цуглуулж, давхар баталгаажуулна.</p>
+            </div>
+          </div>
+
+          <div class="method-levels">
+            <article class="method-card macro-card">
+              <span>01 · МАКРО</span><h2>Байгууллагын түвшин</h2>
+              <p>Төрийн бодлого, захиалагч байгууллагын стратеги, олон улсын чиг хандлагын албан ёсны баримт бичгийн шинжилгээ.</p>
+              <strong>Гаралт</strong><ul><li>Баримт бичгийн шинжилгээ</li><li>Олон улсын харьцуулалтын матриц</li></ul>
+            </article>
+            <article class="method-card meso-card">
+              <span>02 · МЕЗО</span><h2>Үйл ажиллагааны түвшин</h2>
+              <p>Дээд удирдлагын фокус бүлэг болон ижил төстэй хөтөлбөрийн бүтэц, чадамжийн харьцуулалт.</p>
+              <strong>Гаралт</strong><ul><li>Ярилцлагын тэмдэглэл</li><li>Дутагдаж буй чадварын жагсаалт</li></ul>
+            </article>
+            <article class="method-card micro-card">
+              <span>03 · МИКРО</span><h2>Хувь хүний түвшин</h2>
+              <p>Суралцагч болон дунд шатны удирдлагаар чадамжийн өнөөгийн түвшин, ирээдүйн чухалчлалыг үнэлүүлэх.</p>
+              <strong>Гаралт</strong><ul><li>Чадамжийн зөрүүний шинжилгээ</li><li>Шаардлагатай чадамжийн эрэмбэ</li></ul>
+            </article>
+          </div>
+
+          <div class="quality-rules">
+            <div>
+              <p class="eyebrow light">BIAS-ИЙГ БУУРУУЛАХ ХЯНАЛТ</p>
+              <h2>Нотолгоо бүр ижил жинтэй биш.</h2>
+              <p>Систем нь албан бус эх сурвалжийг баримт бичгийн шинжилгээнд бүртгэхгүй. Гэхдээ эх сурвалж албан ёсны байна гэдэг нь автоматаар үнэн, бүрэн гэсэн үг биш тул зорилго, хамрах хүрээ, ашиг сонирхлын байр суурийг давхар тэмдэглэнэ.</p>
+            </div>
+            <ol>
+              <li><strong>Урьдчилсан протокол</strong><span>Шалгуур, хамрах хүрээ, хайлтын хугацааг мэдээлэл харахаас өмнө тогтооно.</span></li>
+              <li><strong>Хоёр судлаачийн хяналт</strong><span>Кодлол, дүгнэлтийн зөрүүг баримтжуулж шийдвэрлэнэ.</span></li>
+              <li><strong>Сөрөг нотолгоо</strong><span>Таамаглалтай нийцээгүй баримтыг хасахгүй, тусад нь тайлбарлана.</span></li>
+              <li><strong>Мэдээллийн мөр</strong><span>Санал бүрийг эх сурвалж, ярилцлагын код, тооцоололтой холбоно.</span></li>
+            </ol>
+          </div>
+
+          <div class="method-warning">
+            <span>!</span>
+            <p><strong>Арга зүйн нэршлийн баталгаажуулалт:</strong> Удирдамжид “EU‑STNA” болон “McGehee & Thayer-ийн 3 түвшний загвар” гэж дурдсан. Эцсийн тайланд арга зүйн тайлбар, эшлэлийг анхдагч албан ёсны эсвэл хянан магадалсан эх сурвалжаар тусад нь баталгаажуулна.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="task-dialog">
+    <form method="dialog" class="dialog-card" id="task-form">
+      <div class="dialog-head">
+        <div><p class="eyebrow" id="dialog-task-code">АЖИЛ</p><h2 id="dialog-task-title">Ажлын мэдээлэл</h2></div>
+        <button class="close-button" value="cancel" aria-label="Хаах" type="submit">×</button>
+      </div>
+      <input type="hidden" name="taskCode">
+      <input type="hidden" name="programId">
+      <div class="field-grid">
+        <label>Төлөв
+          <select name="status" required>
+            <option value="not-started">Эхлээгүй</option>
+            <option value="in-progress">Хийгдэж байна</option>
+            <option value="review">Хяналтад</option>
+            <option value="done">Дууссан</option>
+          </select>
+        </label>
+        <label>Хариуцагч<input name="assignee" placeholder="Нэр, баг, нэгж"></label>
+        <label class="span-two">Нотлох баримтын нэр / холбоос<input name="evidence" placeholder="Файл, тэмдэглэл, матрицын нэр"></label>
+        <label class="span-two">Тайлбар<textarea name="note" rows="3" placeholder="Явц, хязгаарлалт, дараагийн алхам"></textarea></label>
+      </div>
+      <div class="dialog-output"><span>Хүлээгдэж буй үр дүн</span><strong id="dialog-output"></strong></div>
+      <div class="dialog-actions">
+        <button class="button secondary" value="cancel" type="submit">Болих</button>
+        <button class="button primary" id="save-task" value="default" type="submit">Хадгалах</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js?v=20260707-password-login"></script>
+</body>
+</html>

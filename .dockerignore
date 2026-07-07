@@ -1,0 +1,9 @@
+logs
+*.log
+.env
+.env.*
+node_modules
+.git
+README.md
+SHARE-LINK.md
+DEPLOY-PUBLIC.md

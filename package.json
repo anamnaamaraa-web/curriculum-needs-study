@@ -1,0 +1,14 @@
+{
+  "name": "curriculum-needs-study",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Curriculum needs study and competency analysis web system.",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
