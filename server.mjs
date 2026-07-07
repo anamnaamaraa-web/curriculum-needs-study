@@ -14,8 +14,8 @@ await loadLocalEnv(envPath);
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
 const sharedStatePath = path.join(dataDir, "shared-state.json");
 const sharedStateBackupPath = path.join(dataDir, "shared-state.backup.json");
-const supabaseUrl = normalizePublicBaseUrl(process.env.SUPABASE_URL);
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = normalizePublicBaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || "";
 const supabaseStateTable = normalizeSqlIdentifier(process.env.SUPABASE_STATE_TABLE || "app_state", "app_state");
 const stateStorageMode = supabaseUrl && supabaseServiceKey ? "supabase" : "server-file";
 const model = process.env.OPENAI_MODEL || "gpt-5.5";
@@ -138,7 +138,18 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/api/state") {
-      return await saveSharedState(request, response);
+      try {
+        return await saveSharedState(request, response);
+      } catch (error) {
+        console.error("Shared state save failed:", safeError(error));
+        return sendJson(response, 502, {
+          error: stateStorageMode === "supabase"
+            ? "Supabase өгөгдөл хадгалах үед алдаа гарлаа."
+            : "Серверийн өгөгдөл хадгалах үед алдаа гарлаа.",
+          detail: safeError(error),
+          storage: stateStorageMode
+        });
+      }
     }
 
     if (request.method === "GET" && request.url === "/robots.txt") {
@@ -164,11 +175,20 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, host, () => {
+const listenCallback = () => {
   console.log(`Curriculum needs study running locally at http://127.0.0.1:${port}/`);
-  console.log(`LAN sharing is enabled. Open http://<this-computer-ip>:${port}/ from devices on the same network.`);
+  if (!process.env.VERCEL) {
+    console.log(`LAN sharing is enabled. Open http://<this-computer-ip>:${port}/ from devices on the same network.`);
+  }
+  console.log(`State storage: ${stateStorageMode}${stateStorageMode === "supabase" ? ` · table ${supabaseStateTable}` : ""}`);
   console.log(`AI analysis: ${process.env.OPENAI_API_KEY ? "configured" : "not configured"} · model ${model}`);
-});
+};
+
+if (process.env.VERCEL) {
+  server.listen(port, listenCallback);
+} else {
+  server.listen(port, host, listenCallback);
+}
 
 async function analyzeCompetencies(request, response) {
   if (!process.env.OPENAI_API_KEY) {
@@ -347,7 +367,12 @@ async function fileStorageStatus() {
     writable: true,
     exists,
     bytes,
-    savedAt
+    savedAt,
+    supabase: {
+      urlConfigured: Boolean(supabaseUrl),
+      serviceKeyConfigured: Boolean(supabaseServiceKey),
+      table: supabaseStateTable
+    }
   };
 }
 

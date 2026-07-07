@@ -31,6 +31,8 @@ SUPABASE_STATE_TABLE=app_state
 
 Supabase ашиглавал Render persistent disk заавал шаардлагагүй. Дата PostgreSQL database-д хадгалагдана.
 
+Vercel ашиглаж байгаа бол дэлгэрэнгүй тохиргоог `VERCEL-SUPABASE.md` файлаас харна.
+
 1. Supabase dashboard дээр шинэ project үүсгэнэ.
 2. `SQL Editor` хэсэгт `supabase-schema.sql` файлын SQL-г ажиллуулна.
 3. Render Environment Variables дээр дараахыг нэмнэ:

@@ -376,26 +376,52 @@ function queueSharedStateSave() {
       .then(() => saveSharedStateNow())
       .catch((error) => {
         const saveState = $("#save-state");
-        if (saveState) saveState.textContent = "Серверт хадгалах үед алдаа гарлаа · local хадгалалт үлдсэн";
+        const friendlyMessage = storageErrorMessage(error);
+        if (saveState) {
+          saveState.textContent = `Хадгалалтын алдаа: ${friendlyMessage}`;
+          saveState.title = String(error?.message || error || "");
+        }
         console.warn("Shared state save failed:", error);
       });
   }, 350);
 }
 
 async function saveSharedStateNow() {
-  const response = await fetch(sharedStateApiPath, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    body: JSON.stringify({ state })
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const payload = await response.json();
+  let response;
+  try {
+    response = await fetch(sharedStateApiPath, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({ state })
+    });
+  } catch (error) {
+    throw new Error("Сервертэй холбогдож чадсангүй. Та GitHub Pages/static линкээр биш Render/Node server линкээр орсон эсэхээ шалгана уу.");
+  }
+  const responseText = await response.text();
+  let payload = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    throw new Error(`API JSON биш хариу буцаалаа. Энэ линк static hosting байж магадгүй. HTTP ${response.status}`);
+  }
+  if (!response.ok) {
+    throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  }
   const saveState = $("#save-state");
   if (saveState && payload.savedAt) saveState.textContent = "Серверт хадгалагдсан";
   return payload;
+}
+
+function storageErrorMessage(error) {
+  const message = String(error?.message || error || "");
+  if (/HTTP 404|not found/i.test(message)) return "API олдсонгүй. GitHub Pages биш Render/Node server линкээр орно уу.";
+  if (/HTTP 401|HTTP 403|JWT|apikey|permission|permission denied|unauthorized/i.test(message)) return "Supabase key/эрхийн тохиргоо буруу байна.";
+  if (/relation .* does not exist|app_state|table/i.test(message)) return "Supabase дээр app_state table үүсээгүй байна.";
+  if (/Failed to fetch|холбогдож чадсангүй|NetworkError/i.test(message)) return "Сервертэй холбогдож чадсангүй. Public server/API ажиллаж байгаа эсэхийг шалгана уу.";
+  return message || "Хадгалалтын тодорхойгүй алдаа.";
 }
 
 async function manualSaveData() {
@@ -413,9 +439,13 @@ async function manualSaveData() {
     if (saveState) saveState.textContent = "Өгөгдөл хадгалагдсан";
   } catch (error) {
     console.warn("Manual save failed:", error);
-    showToast("Өгөгдөл хадгалах үед алдаа гарлаа");
+    const friendlyMessage = storageErrorMessage(error);
+    showToast(friendlyMessage);
     const saveState = $("#save-state");
-    if (saveState) saveState.textContent = "Хадгалалтын алдаа";
+    if (saveState) {
+      saveState.textContent = `Хадгалалтын алдаа: ${friendlyMessage}`;
+      saveState.title = String(error?.message || error || "");
+    }
   } finally {
     if (button) {
       button.disabled = false;
