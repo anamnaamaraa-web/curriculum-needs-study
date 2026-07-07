@@ -14,6 +14,10 @@ await loadLocalEnv(envPath);
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
 const sharedStatePath = path.join(dataDir, "shared-state.json");
 const sharedStateBackupPath = path.join(dataDir, "shared-state.backup.json");
+const supabaseUrl = normalizePublicBaseUrl(process.env.SUPABASE_URL);
+const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseStateTable = normalizeSqlIdentifier(process.env.SUPABASE_STATE_TABLE || "app_state", "app_state");
+const stateStorageMode = supabaseUrl && supabaseServiceKey ? "supabase" : "server-file";
 const model = process.env.OPENAI_MODEL || "gpt-5.5";
 const publicBaseUrl = normalizePublicBaseUrl(process.env.PUBLIC_BASE_URL);
 const maxRequestBytes = 15_000_000;
@@ -120,7 +124,8 @@ const server = createServer(async (request, response) => {
         ok: true,
         aiConfigured: Boolean(process.env.OPENAI_API_KEY),
         model,
-        publicBaseUrl: publicBaseUrl || null
+        publicBaseUrl: publicBaseUrl || null,
+        storage: await sharedStateStorageStatus()
       });
     }
 
@@ -128,7 +133,7 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, {
         ok: true,
         state: await readSharedState(),
-        storage: "server-file"
+        storage: stateStorageMode
       });
     }
 
@@ -289,6 +294,11 @@ async function analyzeCompetencies(request, response) {
 }
 
 async function readSharedState() {
+  if (stateStorageMode === "supabase") return await readSupabaseState();
+  return await readFileState();
+}
+
+async function readFileState() {
   try {
     const content = await readFile(sharedStatePath, "utf8");
     const payload = JSON.parse(content);
@@ -297,6 +307,114 @@ async function readSharedState() {
     if (error.code === "ENOENT") return null;
     throw error;
   }
+}
+
+async function sharedStateStorageStatus() {
+  if (stateStorageMode === "supabase") return await supabaseStorageStatus();
+  return await fileStorageStatus();
+}
+
+async function fileStorageStatus() {
+  let exists = false;
+  let bytes = 0;
+  let savedAt = null;
+  try {
+    const fileStat = await stat(sharedStatePath);
+    exists = fileStat.isFile();
+    bytes = fileStat.size;
+    if (exists) {
+      const payload = await readSharedState();
+      savedAt = payload?.serverMeta?.savedAt || null;
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      return {
+        mode: "server-file",
+        dataDir,
+        statePath: sharedStatePath,
+        writable: false,
+        exists: false,
+        bytes: 0,
+        savedAt: null,
+        error: safeError(error)
+      };
+    }
+  }
+  return {
+    mode: "server-file",
+    dataDir,
+    statePath: sharedStatePath,
+    writable: true,
+    exists,
+    bytes,
+    savedAt
+  };
+}
+
+async function supabaseStorageStatus() {
+  try {
+    const state = await readSupabaseState();
+    return {
+      mode: "supabase",
+      table: supabaseStateTable,
+      configured: true,
+      writable: true,
+      exists: Boolean(state),
+      savedAt: state?.serverMeta?.savedAt || null
+    };
+  } catch (error) {
+    return {
+      mode: "supabase",
+      table: supabaseStateTable,
+      configured: true,
+      writable: false,
+      exists: false,
+      savedAt: null,
+      error: safeError(error)
+    };
+  }
+}
+
+async function readSupabaseState() {
+  const response = await fetch(supabaseRestUrl(`${supabaseStateTable}?id=eq.default&select=payload,updated_at`), {
+    method: "GET",
+    headers: supabaseHeaders()
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Supabase read failed ${response.status}: ${text.slice(0, 300)}`);
+  const rows = text ? JSON.parse(text) : [];
+  const payload = Array.isArray(rows) && rows[0]?.payload && typeof rows[0].payload === "object" ? rows[0].payload : null;
+  return payload;
+}
+
+async function writeSupabaseState(storedState) {
+  const response = await fetch(supabaseRestUrl(`${supabaseStateTable}?on_conflict=id`), {
+    method: "POST",
+    headers: {
+      ...supabaseHeaders(),
+      "Content-Type": "application/json",
+      "Prefer": "resolution=merge-duplicates,return=representation"
+    },
+    body: JSON.stringify({
+      id: "default",
+      payload: storedState,
+      updated_at: new Date().toISOString()
+    })
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Supabase write failed ${response.status}: ${text.slice(0, 300)}`);
+}
+
+function supabaseRestUrl(pathAndQuery) {
+  return `${supabaseUrl}/rest/v1/${pathAndQuery}`;
+}
+
+function supabaseHeaders() {
+  return {
+    "apikey": supabaseServiceKey,
+    "Authorization": `Bearer ${supabaseServiceKey}`,
+    "Accept": "application/json"
+  };
 }
 
 async function saveSharedState(request, response) {
@@ -314,12 +432,16 @@ async function saveSharedState(request, response) {
       savedAt
     }
   };
+  if (stateStorageMode === "supabase") {
+    await writeSupabaseState(storedState);
+    return sendJson(response, 200, { ok: true, savedAt, storage: stateStorageMode });
+  }
   await mkdir(dataDir, { recursive: true });
   await backupExistingSharedState();
   const tmpPath = path.join(dataDir, `shared-state.${process.pid}.${Date.now()}.tmp`);
   await writeFile(tmpPath, `${JSON.stringify(storedState, null, 2)}\n`, "utf8");
   await rename(tmpPath, sharedStatePath);
-  return sendJson(response, 200, { ok: true, savedAt });
+  return sendJson(response, 200, { ok: true, savedAt, storage: stateStorageMode });
 }
 
 async function backupExistingSharedState() {
@@ -441,6 +563,11 @@ function normalizePublicBaseUrl(value) {
   const url = String(value || "").trim();
   if (!url) return "";
   return url.replace(/\/+$/, "");
+}
+
+function normalizeSqlIdentifier(value, fallback) {
+  const identifier = String(value || "").trim();
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier) ? identifier : fallback;
 }
 
 function requestBaseUrl() {

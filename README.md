@@ -41,7 +41,7 @@ node server.mjs
 
 ## Хязгаарлалт
 
-Prototype нь мэдээллийг серверийн `data/shared-state.json` файлд хамтран хадгалж, browser-ийн `localStorage`-ийг түр fallback cache байдлаар ашиглана.
+Prototype нь `SUPABASE_URL` болон `SUPABASE_SECRET_KEY` тохируулсан үед мэдээллийг Supabase PostgreSQL-д хамтран хадгална. Supabase тохируулаагүй үед серверийн `data/shared-state.json` файлд хадгалж, browser-ийн `localStorage`-ийг түр fallback cache байдлаар ашиглана.
 Үнэгүй локал горим нь бүтэн өгүүлбэрийн ойлголт, хийх үйлдэл, суралцах
 үр дүн, үгүйсгэлийг ил тод дүрмээр хамтатган үнэлдэг; ерөнхий AI семантик
 загвар биш тул үр дүн бүрийг судлаач эх заалттай тулган батална.
