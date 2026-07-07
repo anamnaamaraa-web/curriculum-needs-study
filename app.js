@@ -307,6 +307,32 @@ async function saveSharedStateNow() {
   return payload;
 }
 
+async function manualSaveData() {
+  const button = $("#manual-save-data");
+  const previousText = button?.textContent || "";
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Хадгалж байна...";
+    }
+    saveLocalState();
+    await saveSharedStateNow();
+    showToast("Өгөгдөл сервер/Supabase рүү хадгалагдлаа");
+    const saveState = $("#save-state");
+    if (saveState) saveState.textContent = "Өгөгдөл хадгалагдсан";
+  } catch (error) {
+    console.warn("Manual save failed:", error);
+    showToast("Өгөгдөл хадгалах үед алдаа гарлаа");
+    const saveState = $("#save-state");
+    if (saveState) saveState.textContent = "Хадгалалтын алдаа";
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || "Өгөгдөл хадгалах";
+    }
+  }
+}
+
 function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -1982,6 +2008,8 @@ function setupEvents() {
     $("#menu-button").setAttribute("aria-expanded", String(open));
   });
   $("#email-login-form")?.addEventListener("submit", loginWithEmail);
+  $("#manual-save-data")?.addEventListener("click", manualSaveData);
+  $("#logout-button")?.addEventListener("click", logoutCurrentUser);
   $("#current-email-input")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithEmail(event);
   });
@@ -2244,6 +2272,24 @@ async function loginWithEmail(event) {
   renderEvidence();
   renderAnalysis();
   renderReports();
+}
+
+function logoutCurrentUser() {
+  sessionStorage.removeItem(sessionEmailKey);
+  state.access = normalizeAccess({
+    ...state.access,
+    currentEmail: ""
+  });
+  state.access.currentEmail = "";
+  const currentEmail = $("#current-email-input");
+  const currentPassword = $("#current-password-input");
+  const landingPassword = $("#landing-password-input");
+  if (currentEmail) currentEmail.value = "";
+  if (currentPassword) currentPassword.value = "";
+  if (landingPassword) landingPassword.value = "";
+  saveLocalState();
+  applyAccessControl();
+  showToast("Системээс гарлаа");
 }
 
 initializeApp();

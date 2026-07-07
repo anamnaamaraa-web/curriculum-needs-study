@@ -1654,6 +1654,34 @@ textarea:focus {
   background: rgba(255,255,255,.08);
 }
 
+.top-action-button,
+.logout-button {
+  min-height: 30px;
+  padding: .35rem .65rem;
+  border-radius: 3px;
+  font-size: .66rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.top-action-button {
+  color: #102325;
+  border-color: rgba(255,255,255,.28);
+  background: #78d5cf;
+}
+
+.logout-button {
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.24);
+  background: rgba(255,255,255,.06);
+}
+
+.logout-button:hover,
+.logout-button:focus-visible {
+  border-color: rgba(255,255,255,.5);
+  background: rgba(255,255,255,.12);
+}
+
 .role-badge {
   display: inline-grid;
   min-height: 30px;
@@ -1897,6 +1925,9 @@ textarea:focus {
   .sidebar.open { transform: translateX(0); }
   .app-main { margin-left: 0; }
   .menu-button { display: block; }
+  .top-actions { flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+  .top-action-button,
+  .logout-button { min-height: 28px; padding: .3rem .55rem; }
   .project-identity { flex: 1; margin-left: .7rem; }
   .save-state { display: none; }
   .analysis-workflow { overflow-x: auto; }
