@@ -1376,9 +1376,6 @@ function aggregateComparisonCompetencies() {
 
 function surveyCompetencies() {
   const merged = new Map();
-  competencies.forEach((item) => {
-    mergeSurveyCompetency(merged, { ...item, coreId: item.id, source: "core", sourceLabel: "Үндсэн жагсаалт" });
-  });
 
   aggregateDocumentCompetencies().forEach((item) => {
     const detail = item.description || `${item.documentCount} баримт · ${item.agencyCount} байгууллагын нотолгоо`;
@@ -1437,11 +1434,12 @@ function surveyCompetencies() {
 function renderSurveySourceFilters(items) {
   const buttons = $$("[data-survey-source]");
   if (!buttons.length) return;
+  const scopedItems = items.filter((item) => normalizeSurveyProgramIds(item.programIds).length > 0);
   const counts = {
-    all: items.length,
-    document: items.filter((item) => item.sourceTypes?.includes("document")).length,
-    focus: items.filter((item) => item.sourceTypes?.includes("focus")).length,
-    comparison: items.filter((item) => item.sourceTypes?.includes("comparison")).length
+    all: scopedItems.length,
+    document: scopedItems.filter((item) => item.sourceTypes?.includes("document")).length,
+    focus: scopedItems.filter((item) => item.sourceTypes?.includes("focus")).length,
+    comparison: scopedItems.filter((item) => item.sourceTypes?.includes("comparison")).length
   };
   const labels = {
     all: "Бүгд",
@@ -1465,13 +1463,15 @@ function itemMatchesSurveyProgram(item, programId = selectedSurveyProgramFilter)
   if (programId === "all") return true;
   if (!isProgramAllowed(programId)) return false;
   const ids = normalizeSurveyProgramIds(item.programIds);
-  return ids.length === 0 || ids.includes(programId);
+  return ids.includes(programId);
 }
 
 function renderSurveyProgramFilters(items) {
   const buttons = $$("[data-survey-program]");
   if (!buttons.length) return;
-  const sourceFilteredItems = items.filter(itemMatchesSurveySource);
+  const sourceFilteredItems = items
+    .filter((item) => normalizeSurveyProgramIds(item.programIds).length > 0)
+    .filter(itemMatchesSurveySource);
   const allowedPrograms = new Set(allowedProgramIds());
   buttons.forEach((button) => {
     const programId = button.dataset.surveyProgram || "all";
@@ -1502,12 +1502,12 @@ function restoreSurveyDraftRatings() {
 
 function appendCompetencyRow(table, item) {
   const row = document.createElement("div");
-  row.className = `competency-row ${item.source !== "core" ? "document-derived" : ""}`;
+  row.className = "competency-row document-derived";
   row.innerHTML = `
     <div class="competency-name">
       <strong>${escapeHtml(item.name)}</strong>
       <small>${escapeHtml(item.detail || "")}</small>
-      ${item.source !== "core" ? `<em>${escapeHtml(item.sourceLabel)}</em>` : ""}
+      <em>${escapeHtml(item.sourceLabel || "Шинжилгээгээр илэрсэн")}</em>
     </div>
     ${ratingGroup(`${item.id}_current`, "current")}
     ${ratingGroup(`${item.id}_importance`, "importance")}`;
@@ -1531,6 +1531,7 @@ function buildCompetencyTable() {
   renderSurveySourceFilters(allItems);
   renderSurveyProgramFilters(allItems);
   const items = allItems
+    .filter((item) => normalizeSurveyProgramIds(item.programIds).length > 0)
     .filter(itemMatchesSurveySource)
     .filter((item) => itemMatchesSurveyProgram(item));
   if (!items.length) {
@@ -1541,7 +1542,6 @@ function buildCompetencyTable() {
     return;
   }
   if (selectedSurveyProgramFilter === "all") {
-    appendCompetencyGroup(table, "Нийтлэг чадамж", items.filter((item) => !normalizeSurveyProgramIds(item.programIds).length));
     accessibleProgramDefinitions().forEach((program) => {
       appendCompetencyGroup(table, program.name, items.filter((item) => normalizeSurveyProgramIds(item.programIds).includes(program.id)));
     });
@@ -3431,6 +3431,58 @@ function programComparisonMetrics(localProgram, comparisons) {
   };
 }
 
+function joinedCompetencies(value) {
+  const items = splitFocusGapItems(value).map(cleanCompetencyName).filter(Boolean);
+  return items.length ? items.join("; ") : "—";
+}
+
+function comparisonCell(value) {
+  return escapeHtml(value || "—");
+}
+
+function comparisonProgramColumn(item, type = "international") {
+  if (!item) return "—";
+  if (type === "local") return escapeHtml(item.name || "Монгол хөтөлбөр");
+  const title = item.program || "Олон улсын хөтөлбөр";
+  const meta = [item.country, item.institution].filter(Boolean).join(" · ");
+  return `${escapeHtml(title)}${meta ? `<br><small>${escapeHtml(meta)}</small>` : ""}`;
+}
+
+function renderProgramComparisonTable(localProgram, comparisons) {
+  const columns = [
+    { id: "local", title: "Монголын хөтөлбөр", type: "local", item: localProgram || null },
+    ...comparisons.map((item, index) => ({ id: item.id || `international-${index}`, title: `Олон улсын ${index + 1}`, type: "international", item }))
+  ];
+  const rows = [
+    { label: "Хөтөлбөрийн нэр", value: (column) => comparisonProgramColumn(column.item, column.type) },
+    { label: "Багц цаг / кредит", value: (column) => comparisonCell(column.item?.credits) },
+    { label: "Сургалтын хэлбэр", value: (column) => comparisonCell(column.item?.format) },
+    { label: "Суралцах хугацаа", value: (column) => comparisonCell(column.item?.duration) },
+    { label: "Багшийн шаардлага", value: (column) => comparisonCell(column.item?.teacherRequirements) },
+    { label: "Зорилтот бүлэг", value: (column) => column.type === "local" ? comparisonCell(column.item?.targetGroup) : comparisonCell(column.item?.localProgramTargetGroup) },
+    { label: "Чадамж", value: (column) => comparisonCell(joinedCompetencies(column.item?.competencies)) },
+    { label: "Албан ёсны холбоос", value: (column) => column.item?.url ? `<a href="${escapeHtml(column.item.url)}" target="_blank" rel="noopener">Холбоос</a>` : "—" }
+  ];
+  return `
+    <div class="program-comparison-table-wrap">
+      <table class="program-comparison-table">
+        <thead>
+          <tr>
+            <th>Агуулга</th>
+            ${columns.map((column) => `<th>${escapeHtml(column.title)}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <th>${escapeHtml(row.label)}</th>
+              ${columns.map((column) => `<td>${row.value(column)}</td>`).join("")}
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function renderLocalProgramList(items = visibleLocalPrograms()) {
   const count = $("#local-program-count");
   const list = $("#local-program-list");
@@ -3498,27 +3550,7 @@ function renderProgramComparisonDetail() {
           </div>
           <span>${metrics.matchRate}% давхцал</span>
         </header>
-        <div class="program-comparison-two-col">
-          <article class="comparison-detail-panel">
-            <h3>Монголын хөтөлбөр</h3>
-            ${group.local.length ? group.local.map((item) => `
-              <div class="comparison-program-card local">
-                <strong>${escapeHtml(item.name || "Нэргүй хөтөлбөр")}</strong>
-                <small>${escapeHtml(programLevelLabel(item.level))} · ${escapeHtml(item.credits || "кредит —")} · ${escapeHtml(item.duration || "хугацаа —")} · ${escapeHtml(item.format || "хэлбэр —")}</small>
-                <p><b>Зорилтот бүлэг:</b> ${escapeHtml(item.targetGroup || "Оруулаагүй")}</p>
-                <p><b>Багш:</b> ${escapeHtml(item.teacherRequirements || "Оруулаагүй")}</p>
-              </div>`).join("") : `<div class="empty-state compact">Монголын хөтөлбөр бүртгээгүй.</div>`}
-          </article>
-          <article class="comparison-detail-panel">
-            <h3>Олон улсын хөтөлбөрүүд</h3>
-            ${group.international.length ? group.international.map((item) => `
-              <div class="comparison-program-card">
-                <strong>${escapeHtml(item.program || "Хөтөлбөрийн нэргүй")}</strong>
-                <small>${escapeHtml(item.country || "улс —")} · ${escapeHtml(item.institution || "байгууллага —")} · ${escapeHtml(item.credits || "кредит —")} · ${escapeHtml(item.duration || "хугацаа —")} · ${escapeHtml(item.format || "хэлбэр —")}</small>
-                <p><b>Багш:</b> ${escapeHtml(item.teacherRequirements || "Оруулаагүй")}</p>
-              </div>`).join("") : `<div class="empty-state compact">Энэ хөтөлбөрт олон улсын харьцуулалт бүртгээгүй.</div>`}
-          </article>
-        </div>
+        ${renderProgramComparisonTable(primaryLocal, group.international)}
         <div class="comparison-detail-panel">
           <h3>Чадамжийн харьцуулалт</h3>
           <div class="comparison-chip-board">
@@ -3780,7 +3812,6 @@ function setupEvents() {
     duration: data.get("duration"),
     teacherRequirements: data.get("teacherRequirements"),
     competencies: data.get("competencies"),
-    learningOutcomes: data.get("learningOutcomes"),
     url: data.get("url")
   }), "Монголын хөтөлбөр бүртгэгдлээ"));
   $("#comparison-detail-program-filter")?.addEventListener("change", renderProgramComparisonDetail);
