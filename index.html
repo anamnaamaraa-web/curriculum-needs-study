@@ -21,7 +21,7 @@
       window.location.replace(localSite.href);
     }
   </script>
-  <link rel="stylesheet" href="styles.css?v=20260707-comparison-survey-program-scope">
+  <link rel="stylesheet" href="styles.css?v=20260708-learning-outcome-persistence">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Үндсэн агуулга руу шилжих</a>
@@ -98,6 +98,9 @@
         </button>
         <button class="nav-item" type="button" data-view-target="analysis">
           <span class="nav-icon">↗</span>Нэгтгэл шинжилгээ
+        </button>
+        <button class="nav-item" type="button" data-view-target="program-comparison">
+          <span class="nav-icon">⇄</span>Хөтөлбөрийн харьцуулалт
         </button>
         <button class="nav-item" type="button" data-view-target="reports">
           <span class="nav-icon">▤</span>Гарах үр дүн, тайлан
@@ -696,6 +699,7 @@
                 <button class="button primary" id="analyze-learning-outcomes" type="button">Суралцахуйн үр дүнг харьцуулах</button>
                 <button class="text-button" id="export-learning-outcome-coverage" type="button" hidden>CSV татах</button>
               </div>
+              <p class="coverage-save-status" id="learning-outcome-save-status">Оруулсан өгөгдөл болон үр дүн хадгалагдаагүй байна.</p>
               <div class="coverage-summary" id="learning-outcome-summary" hidden>
                 <div><span>Тусгасан</span><strong id="learning-outcome-covered-count">0</strong></div>
                 <div><span>Хэсэгчлэн</span><strong id="learning-outcome-partial-count">0</strong></div>
@@ -761,6 +765,76 @@
             <strong>Тайлбарлах дүрэм</strong>
             <p>n хүрээгүй, төлөөлөл тэнцвэргүй эсвэл “мэдэхгүй” хариулт их үед үр дүнг нийт олонлогт ерөнхийлөхгүй. Зөрүү нь шийдвэрийн цорын ганц шалгуур биш; макро ба мезо нотолгоотой давхар баталгаажуулна.</p>
           </div>
+        </section>
+
+        <section class="view" id="program-comparison" aria-labelledby="program-comparison-title">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">ОЛОН УЛСЫН ХАРЬЦУУЛАЛТ · ДЭЛГЭРЭНГҮЙ ҮР ДҮН</p>
+              <h1 id="program-comparison-title">Хөтөлбөрийн харьцуулалтын самбар</h1>
+              <p>“Судалгааны хэрэгслүүд” доторх олон улсын харьцуулалтын бүртгэлээс дата татаж, Монголын хөтөлбөртэй хичээл, кредит, хугацаа, багшийн шаардлага, чадамжаар ангилан харуулна.</p>
+            </div>
+            <div class="head-actions">
+              <label class="select-compact">Хөтөлбөр
+                <select id="comparison-detail-program-filter">
+                  <option value="all">Бүх хөтөлбөр</option>
+                  <option value="police">Цагдаагийн стратеги</option>
+                  <option value="border">Хилийн стратеги</option>
+                  <option value="corrections">Шүүхийн шийдвэр гүйцэтгэлийн стратеги</option>
+                  <option value="emergency">Онцгой байдлын стратеги</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="comparison-detail-layout">
+            <form class="data-form local-program-form" id="local-program-form">
+              <div class="form-title"><span>М</span><div><h2>Монголын хөтөлбөр оруулах</h2><p>Эх сурвалжтай, албан ёсны баталгаатай мэдээллийг оруулна. Зохиож бичихийг хориглоно.</p></div></div>
+              <div class="field-grid">
+                <label>Хамааруулах хөтөлбөр
+                  <select name="programId" required>
+                    <option value="">Сонгоно уу</option>
+                    <option value="police">Цагдаагийн стратеги</option>
+                    <option value="border">Хилийн стратеги</option>
+                    <option value="corrections">Шүүхийн шийдвэр гүйцэтгэлийн стратеги</option>
+                    <option value="emergency">Онцгой байдлын стратеги</option>
+                  </select>
+                </label>
+                <label>Түвшин
+                  <select name="level" required>
+                    <option value="">Сонгоно уу</option>
+                    <option value="certificate">Богино хугацааны / сертификат</option>
+                    <option value="bachelor">Бакалавр</option>
+                    <option value="master">Магистр</option>
+                    <option value="doctorate">Доктор</option>
+                    <option value="professional">Мэргэжил дээшлүүлэх</option>
+                    <option value="other">Бусад</option>
+                  </select>
+                </label>
+                <label class="span-two">Монголын хөтөлбөрийн нэр<input name="name" required placeholder="Жишээ: Стратегийн удирдлагын магистрын хөтөлбөр"></label>
+                <label>Нийт кредит<input name="credits" placeholder="Жишээ: 60 кредит"></label>
+                <label>Сургалтын хэлбэр<input name="format" placeholder="Танхим, цахим, хосолсон..."></label>
+                <label>Суралцах хугацаа<input name="duration" placeholder="Жишээ: 1.5 жил / 3 семестр"></label>
+                <label>Багшийн шаардлага<input name="teacherRequirements" placeholder="Жишээ: докторын зэрэг, салбарын туршлага"></label>
+                <label class="span-two">Зорилтот бүлэг<textarea name="targetGroup" rows="2" placeholder="Хэн суралцах, ямар албан тушаалтанд чиглэхийг оруулна"></textarea></label>
+                <label class="span-two">Гол чадамжууд<textarea name="competencies" rows="4" placeholder="Нэг мөрөнд нэг чадамж оруулна"></textarea></label>
+                <label class="span-two">Суралцахуйн үр дүн / нотлох эх<textarea name="learningOutcomes" rows="4" placeholder="Албан ёсны хөтөлбөрийн заалт, суралцахуйн үр дүн, эх сурвалжийн тайлбар"></textarea></label>
+                <label class="span-two">Албан ёсны холбоос<input name="url" type="url" placeholder="https://..."></label>
+              </div>
+              <button class="button primary" type="submit">Монгол хөтөлбөр хадгалах</button>
+            </form>
+
+            <aside class="evidence-panel">
+              <div class="section-heading compact">
+                <div><p class="eyebrow">МОНГОЛ ХӨТӨЛБӨР</p><h2>Бүртгэл</h2></div>
+                <span class="count-pill" id="local-program-count">0</span>
+              </div>
+              <div class="evidence-list" id="local-program-list"></div>
+            </aside>
+          </div>
+
+          <div class="comparison-detail-summary" id="comparison-detail-summary"></div>
+          <div class="program-comparison-groups" id="program-comparison-groups"></div>
         </section>
 
         <section class="view" id="reports" aria-labelledby="reports-title">
@@ -945,6 +1019,6 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260707-comparison-survey-program-scope"></script>
+  <script src="app.js?v=20260708-learning-outcome-persistence"></script>
 </body>
 </html>

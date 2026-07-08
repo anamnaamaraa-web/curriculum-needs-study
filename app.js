@@ -93,6 +93,7 @@ const managedViewDefinitions = [
   { id: "tools", name: "Судалгааны хэрэгслүүд", group: "Ажлын орчин" },
   { id: "survey", name: "Чадамжийн асуулга", group: "Ажлын орчин" },
   { id: "analysis", name: "Нэгдсэн шинжилгээ", group: "Ажлын орчин" },
+  { id: "program-comparison", name: "Хөтөлбөрийн харьцуулалт", group: "Ажлын орчин" },
   { id: "reports", name: "Гарах үр дүн, тайлан", group: "Ажлын орчин" },
   { id: "methodology", name: "Арга зүй ба чанарын хяналт", group: "Лавлагаа" }
 ];
@@ -136,6 +137,15 @@ function defaultState() {
     documents: [],
     focusGroups: [],
     comparisons: [],
+    localPrograms: [],
+    learningOutcomeCoverage: {
+      text: "",
+      results: [],
+      programFilter: "all",
+      sourceFilter: "all",
+      agencyFilter: "",
+      updatedAt: ""
+    },
     surveys: [],
     access: createDefaultAccess()
   };
@@ -156,6 +166,17 @@ function normalizeProjectState(saved) {
     documents: Array.isArray(saved.documents) ? saved.documents : [],
     focusGroups: Array.isArray(saved.focusGroups) ? saved.focusGroups : [],
     comparisons: Array.isArray(saved.comparisons) ? saved.comparisons : [],
+    localPrograms: Array.isArray(saved.localPrograms) ? saved.localPrograms : [],
+    learningOutcomeCoverage: saved.learningOutcomeCoverage && typeof saved.learningOutcomeCoverage === "object"
+      ? {
+          text: String(saved.learningOutcomeCoverage.text || ""),
+          results: Array.isArray(saved.learningOutcomeCoverage.results) ? saved.learningOutcomeCoverage.results : [],
+          programFilter: saved.learningOutcomeCoverage.programFilter || "all",
+          sourceFilter: saved.learningOutcomeCoverage.sourceFilter || "all",
+          agencyFilter: saved.learningOutcomeCoverage.agencyFilter || "",
+          updatedAt: saved.learningOutcomeCoverage.updatedAt || ""
+        }
+      : base.learningOutcomeCoverage,
     surveys: Array.isArray(saved.surveys) ? saved.surveys : [],
     access: normalizeAccess(saved.access),
     serverMeta: saved.serverMeta && typeof saved.serverMeta === "object" ? saved.serverMeta : {}
@@ -295,6 +316,10 @@ function mergeProjectStates(primaryState, secondaryState) {
     documents: mergeById(primary.documents, secondary.documents),
     focusGroups: mergeById(primary.focusGroups, secondary.focusGroups),
     comparisons: mergeById(primary.comparisons, secondary.comparisons),
+    localPrograms: mergeById(primary.localPrograms, secondary.localPrograms),
+    learningOutcomeCoverage: newerTimestamp(primary.learningOutcomeCoverage?.updatedAt, secondary.learningOutcomeCoverage?.updatedAt)
+      ? primary.learningOutcomeCoverage
+      : secondary.learningOutcomeCoverage,
     surveys: mergeById(primary.surveys, secondary.surveys),
     access: mergeAccess(primary.access, secondary.access),
     serverMeta: primary.serverMeta || secondary.serverMeta || {}
@@ -330,6 +355,14 @@ function mergeById(primaryItems = [], secondaryItems = []) {
     map.set(key, { ...(map.get(key) || {}), ...item });
   });
   return [...map.values()];
+}
+
+function newerTimestamp(primaryValue, secondaryValue) {
+  const primaryTime = Date.parse(primaryValue || "");
+  const secondaryTime = Date.parse(secondaryValue || "");
+  if (Number.isFinite(primaryTime) && !Number.isFinite(secondaryTime)) return true;
+  if (!Number.isFinite(primaryTime)) return false;
+  return primaryTime >= secondaryTime;
 }
 
 function mergeAccess(primaryAccess = {}, secondaryAccess = {}) {
@@ -374,6 +407,9 @@ function stateActivityScore(projectState) {
     + project.documents.length * 10
     + project.focusGroups.length * 6
     + project.comparisons.length * 6
+    + project.localPrograms.length * 6
+    + (project.learningOutcomeCoverage?.text ? 4 : 0)
+    + (project.learningOutcomeCoverage?.results?.length || 0)
     + project.surveys.length * 4
     + accessScore * 2
     + passwordScore;
@@ -961,6 +997,7 @@ function setView(viewId) {
   if (viewId === "tools") renderEvidence();
   if (viewId === "survey") buildCompetencyTable();
   if (viewId === "analysis") renderAnalysis();
+  if (viewId === "program-comparison") renderProgramComparisonDetail();
   if (viewId === "reports") renderReports();
   if (viewId === "settings") renderAccessSettings();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2126,6 +2163,7 @@ function registerComparisonSuggestion(metadata, silent = false) {
   if (!silent) {
     persist("Харьцуулах хөтөлбөр бүртгэгдлээ");
     renderEvidence();
+    renderProgramComparisonDetail();
     renderDashboard();
   }
   return true;
@@ -2621,6 +2659,7 @@ function handleDataForm(event, collection, mapper, message) {
   }
   if (collection === "comparisons") comparisonFormEvidence = {};
   renderEvidence();
+  renderProgramComparisonDetail();
   renderDashboard();
 }
 
@@ -3112,7 +3151,78 @@ function renderCurriculumCoverageResults(results) {
 }
 
 function updateLearningOutcomeCount() {
-  $("#learning-outcome-char-count").textContent = $("#learning-outcome-text").value.length.toLocaleString();
+  const text = $("#learning-outcome-text").value;
+  $("#learning-outcome-char-count").textContent = text.length.toLocaleString();
+  if (text !== learningOutcomeCoverageText) {
+    learningOutcomeCoverageText = text;
+    learningOutcomeCoverageResults = [];
+    state.learningOutcomeCoverage = {
+      ...(state.learningOutcomeCoverage || {}),
+      text,
+      results: [],
+      programFilter: selectedSurveyProgramFilter,
+      sourceFilter: selectedSurveySourceFilter,
+      agencyFilter: $("#competency-agency-filter")?.value || "",
+      updatedAt: new Date().toISOString()
+    };
+    saveLocalState();
+    queueSharedStateSave();
+    renderLearningOutcomeCoverageResults([]);
+    updateLearningOutcomeSaveStatus();
+  }
+}
+
+function updateLearningOutcomeSaveStatus() {
+  const status = $("#learning-outcome-save-status");
+  if (!status) return;
+  const saved = state.learningOutcomeCoverage || {};
+  if (!saved.text && !saved.results?.length) {
+    status.textContent = "Оруулсан өгөгдөл болон үр дүн хадгалагдаагүй байна.";
+    return;
+  }
+  const resultText = saved.results?.length ? `${saved.results.length} үр дүн хадгалагдсан` : "үр дүн хараахан үүсээгүй";
+  const programText = saved.programFilter === "all" ? "Бүх хөтөлбөр" : programLabel(saved.programFilter);
+  const dateText = saved.updatedAt ? new Date(saved.updatedAt).toLocaleString("mn-MN") : "огноо тодорхойгүй";
+  status.textContent = `Хадгалсан: ${dateText} · ${programText} · ${resultText}`;
+}
+
+function saveLearningOutcomeCoverage(results = learningOutcomeCoverageResults, text = learningOutcomeCoverageText, silent = false) {
+  state.learningOutcomeCoverage = {
+    text,
+    results,
+    programFilter: selectedSurveyProgramFilter,
+    sourceFilter: selectedSurveySourceFilter,
+    agencyFilter: $("#competency-agency-filter")?.value || "",
+    updatedAt: new Date().toISOString()
+  };
+  learningOutcomeCoverageText = text;
+  learningOutcomeCoverageResults = results;
+  updateLearningOutcomeSaveStatus();
+  if (silent) {
+    saveLocalState();
+    queueSharedStateSave();
+  } else {
+    persist("Суралцахуйн үр дүнгийн харьцуулалт хадгалагдлаа");
+  }
+}
+
+function restoreLearningOutcomeCoverage() {
+  const saved = state.learningOutcomeCoverage || {};
+  const text = String(saved.text || "");
+  const results = Array.isArray(saved.results) ? saved.results : [];
+  learningOutcomeCoverageText = text;
+  learningOutcomeCoverageResults = results;
+  if (saved.programFilter && (saved.programFilter === "all" || programDefinitions.some((program) => program.id === saved.programFilter))) {
+    selectedSurveyProgramFilter = saved.programFilter;
+  }
+  if (saved.sourceFilter) selectedSurveySourceFilter = saved.sourceFilter;
+  const textarea = $("#learning-outcome-text");
+  if (textarea) textarea.value = text;
+  const agencyFilter = $("#competency-agency-filter");
+  if (agencyFilter && saved.agencyFilter) agencyFilter.value = saved.agencyFilter;
+  updateLearningOutcomeCount();
+  renderLearningOutcomeCoverageResults(results);
+  updateLearningOutcomeSaveStatus();
 }
 
 async function analyzeLearningOutcomeCoverage(silent = false) {
@@ -3129,6 +3239,7 @@ async function analyzeLearningOutcomeCoverage(silent = false) {
   if (!competencies.length) {
     learningOutcomeCoverageText = text;
     learningOutcomeCoverageResults = [];
+    saveLearningOutcomeCoverage([], text, silent);
     renderLearningOutcomeCoverageResults([]);
     if (!silent) showToast("Харьцуулах чадамжийн жагсаалт хараахан алга");
     return;
@@ -3146,6 +3257,7 @@ async function analyzeLearningOutcomeCoverage(silent = false) {
     if (runId !== learningOutcomeCoverageRunId) return;
     learningOutcomeCoverageText = text;
     learningOutcomeCoverageResults = results;
+    saveLearningOutcomeCoverage(results, text, silent);
     renderLearningOutcomeCoverageResults(results);
     if (!silent) showToast(`${results.length} чадамжийг суралцахуйн үр дүнтэй харьцууллаа`);
   } catch (error) {
@@ -3266,14 +3378,157 @@ function programLevelLabel(value) {
 }
 
 function deleteEvidence(prefix, id) {
-  const map = { document: "documents", focus: "focusGroups", comparison: "comparisons" };
+  const map = { document: "documents", focus: "focusGroups", comparison: "comparisons", localProgram: "localPrograms" };
   const collection = map[prefix];
   if (!collection) return;
   state[collection] = state[collection].filter((item) => item.id !== id);
   persist("Бүртгэл устгагдлаа");
   renderEvidence();
+  renderProgramComparisonDetail();
   buildCompetencyTable();
   renderDashboard();
+}
+
+function selectedComparisonDetailProgram() {
+  const value = $("#comparison-detail-program-filter")?.value || "all";
+  if (value === "all") return "all";
+  return isProgramAllowed(value) ? value : "all";
+}
+
+function visibleLocalPrograms() {
+  const selected = selectedComparisonDetailProgram();
+  return (state.localPrograms || []).filter((item) => {
+    const programId = item.programId || "";
+    return isProgramAllowed(programId) && (selected === "all" || programId === selected);
+  });
+}
+
+function visibleComparisonDetailItems() {
+  const selected = selectedComparisonDetailProgram();
+  return state.comparisons.filter((item) => {
+    const programId = comparisonProgramId(item);
+    return programDefinitions.some((program) => program.id === programId)
+      && isProgramAllowed(programId)
+      && (selected === "all" || programId === selected);
+  });
+}
+
+function programComparisonMetrics(localProgram, comparisons) {
+  const localCompetencies = splitFocusGapItems(localProgram?.competencies || "").map(cleanCompetencyName).filter(Boolean);
+  const localKeys = new Set(localCompetencies.map(surveyCompetencyKey));
+  const internationalCompetencies = [...new Set(comparisons.flatMap(comparisonCompetencies))];
+  const internationalKeys = new Set(internationalCompetencies.map(surveyCompetencyKey));
+  const matched = internationalCompetencies.filter((item) => localKeys.has(surveyCompetencyKey(item)));
+  const missing = internationalCompetencies.filter((item) => !localKeys.has(surveyCompetencyKey(item)));
+  const localOnly = localCompetencies.filter((item) => !internationalKeys.has(surveyCompetencyKey(item)));
+  return {
+    localCompetencies,
+    internationalCompetencies,
+    matched,
+    missing,
+    localOnly,
+    matchRate: internationalCompetencies.length ? Math.round(matched.length / internationalCompetencies.length * 100) : 0
+  };
+}
+
+function renderLocalProgramList(items = visibleLocalPrograms()) {
+  const count = $("#local-program-count");
+  const list = $("#local-program-list");
+  if (count) count.textContent = items.length;
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">Монголын хөтөлбөр хараахан бүртгээгүй байна.</div>`;
+    return;
+  }
+  list.innerHTML = items.slice().reverse().map((item) => `
+    <article class="evidence-item">
+      <header>
+        <h3>${escapeHtml(item.name || "Нэргүй хөтөлбөр")}</h3>
+        <button class="delete-item" type="button" data-delete="localProgram" data-id="${item.id}">Устгах</button>
+      </header>
+      <p>${escapeHtml(programLabel(item.programId))} · ${escapeHtml(programLevelLabel(item.level))} · ${escapeHtml(item.credits || "кредит оруулаагүй")}</p>
+      <div class="evidence-meta">
+        <span>${escapeHtml(item.format || "хэлбэр оруулаагүй")}</span>
+        <span>${escapeHtml(item.duration || "хугацаа оруулаагүй")}</span>
+        <span>${splitFocusGapItems(item.competencies).length} чадамж</span>
+      </div>
+    </article>`).join("");
+}
+
+function renderProgramComparisonDetail() {
+  const summary = $("#comparison-detail-summary");
+  const groups = $("#program-comparison-groups");
+  if (!summary || !groups) return;
+  const selected = selectedComparisonDetailProgram();
+  const localPrograms = visibleLocalPrograms();
+  const comparisons = visibleComparisonDetailItems();
+  renderLocalProgramList(localPrograms);
+  const grouped = accessibleProgramDefinitions()
+    .filter((program) => selected === "all" || program.id === selected)
+    .map((program) => {
+      const local = localPrograms.filter((item) => item.programId === program.id);
+      const international = comparisons.filter((item) => comparisonProgramId(item) === program.id);
+      return { program, local, international };
+    })
+    .filter((group) => group.local.length || group.international.length);
+
+  summary.innerHTML = `
+    <div class="comparison-detail-cards">
+      <article><span>Монгол хөтөлбөр</span><strong>${localPrograms.length}</strong><p>гар аргаар баталгаажуулсан бүртгэл</p></article>
+      <article><span>Олон улсын хөтөлбөр</span><strong>${comparisons.length}</strong><p>судалгааны хэрэгслээс татсан дата</p></article>
+      <article><span>Ангилсан бүлэг</span><strong>${grouped.length}</strong><p>хөтөлбөрөөр харьцуулсан үр дүн</p></article>
+    </div>`;
+
+  if (!grouped.length) {
+    groups.innerHTML = `<div class="empty-state">Харьцуулах дата хараахан алга. Эхлээд Монголын хөтөлбөр болон олон улсын харьцуулалтын бүртгэл нэмнэ үү.</div>`;
+    return;
+  }
+
+  groups.innerHTML = grouped.map((group) => {
+    const primaryLocal = group.local[0] || {};
+    const metrics = programComparisonMetrics(primaryLocal, group.international);
+    const uniqueCountries = [...new Set(group.international.map((item) => item.country).filter(Boolean))];
+    return `
+      <section class="program-comparison-group">
+        <header>
+          <div>
+            <p class="eyebrow">ХӨТӨЛБӨРӨӨР АНГИЛСАН ХАРЬЦУУЛАЛТ</p>
+            <h2>${escapeHtml(group.program.name)}</h2>
+            <p>${group.local.length} Монгол бүртгэл · ${group.international.length} олон улсын хөтөлбөр · ${uniqueCountries.length} улс</p>
+          </div>
+          <span>${metrics.matchRate}% давхцал</span>
+        </header>
+        <div class="program-comparison-two-col">
+          <article class="comparison-detail-panel">
+            <h3>Монголын хөтөлбөр</h3>
+            ${group.local.length ? group.local.map((item) => `
+              <div class="comparison-program-card local">
+                <strong>${escapeHtml(item.name || "Нэргүй хөтөлбөр")}</strong>
+                <small>${escapeHtml(programLevelLabel(item.level))} · ${escapeHtml(item.credits || "кредит —")} · ${escapeHtml(item.duration || "хугацаа —")} · ${escapeHtml(item.format || "хэлбэр —")}</small>
+                <p><b>Зорилтот бүлэг:</b> ${escapeHtml(item.targetGroup || "Оруулаагүй")}</p>
+                <p><b>Багш:</b> ${escapeHtml(item.teacherRequirements || "Оруулаагүй")}</p>
+              </div>`).join("") : `<div class="empty-state compact">Монголын хөтөлбөр бүртгээгүй.</div>`}
+          </article>
+          <article class="comparison-detail-panel">
+            <h3>Олон улсын хөтөлбөрүүд</h3>
+            ${group.international.length ? group.international.map((item) => `
+              <div class="comparison-program-card">
+                <strong>${escapeHtml(item.program || "Хөтөлбөрийн нэргүй")}</strong>
+                <small>${escapeHtml(item.country || "улс —")} · ${escapeHtml(item.institution || "байгууллага —")} · ${escapeHtml(item.credits || "кредит —")} · ${escapeHtml(item.duration || "хугацаа —")} · ${escapeHtml(item.format || "хэлбэр —")}</small>
+                <p><b>Багш:</b> ${escapeHtml(item.teacherRequirements || "Оруулаагүй")}</p>
+              </div>`).join("") : `<div class="empty-state compact">Энэ хөтөлбөрт олон улсын харьцуулалт бүртгээгүй.</div>`}
+          </article>
+        </div>
+        <div class="comparison-detail-panel">
+          <h3>Чадамжийн харьцуулалт</h3>
+          <div class="comparison-chip-board">
+            <div><b>Давхцсан</b>${metrics.matched.map((item) => `<span class="matched">✓ ${escapeHtml(item)}</span>`).join("") || `<small>Давхцал илрээгүй</small>`}</div>
+            <div><b>Олон улсад байгаа, Монгол хөтөлбөрт дутуу</b>${metrics.missing.map((item) => `<span class="missing">+ ${escapeHtml(item)}</span>`).join("") || `<small>Дутуу чадамж илрээгүй</small>`}</div>
+            <div><b>Монгол хөтөлбөрт байгаа онцлог</b>${metrics.localOnly.map((item) => `<span>${escapeHtml(item)}</span>`).join("") || `<small>Онцлог чадамж оруулаагүй</small>`}</div>
+          </div>
+        </div>
+      </section>`;
+  }).join("");
 }
 
 function mean(values) {
@@ -3515,6 +3770,24 @@ function setupEvents() {
   $("#comparison-form")?.elements.programId?.addEventListener("change", (event) => {
     delete event.currentTarget.dataset.autoContextProgram;
   });
+  $("#local-program-form")?.addEventListener("submit", (event) => handleDataForm(event, "localPrograms", (data) => ({
+    programId: data.get("programId"),
+    name: data.get("name"),
+    level: data.get("level"),
+    targetGroup: data.get("targetGroup"),
+    credits: data.get("credits"),
+    format: data.get("format"),
+    duration: data.get("duration"),
+    teacherRequirements: data.get("teacherRequirements"),
+    competencies: data.get("competencies"),
+    learningOutcomes: data.get("learningOutcomes"),
+    url: data.get("url")
+  }), "Монголын хөтөлбөр бүртгэгдлээ"));
+  $("#comparison-detail-program-filter")?.addEventListener("change", renderProgramComparisonDetail);
+  $("#program-comparison")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete]");
+    if (button && confirm("Энэ бүртгэлийг устгах уу?")) deleteEvidence(button.dataset.delete, button.dataset.id);
+  });
   $("#tools").addEventListener("click", (event) => {
     const fillButton = event.target.closest("[data-fill-comparison]");
     const registerButton = event.target.closest("[data-register-comparison]");
@@ -3538,6 +3811,7 @@ function setupEvents() {
       if (added) {
         persist(`${added} харьцуулах хөтөлбөр бүртгэгдлээ`);
         renderComparisonMatrix();
+        renderProgramComparisonDetail();
         renderDashboard();
         showToast(`${added} хөтөлбөр матрицад нэмэгдлээ`);
       }
@@ -3733,10 +4007,13 @@ async function loginWithEmail(event) {
   if (landingPassword) landingPassword.value = "";
   if (currentPassword) currentPassword.value = "";
   applyAccessControl();
+  restoreLearningOutcomeCoverage();
+  buildCompetencyTable();
   renderDashboard();
   renderPlan();
   renderEvidence();
   renderAnalysis();
+  renderProgramComparisonDetail();
   renderReports();
 }
 
@@ -3763,6 +4040,7 @@ initializeApp();
 async function initializeApp() {
   setupEvents();
   await hydrateSharedState();
+  restoreLearningOutcomeCoverage();
   buildCompetencyTable();
   renderRoleSwitcher();
   updateAnalysisModeUi();
@@ -3770,6 +4048,7 @@ async function initializeApp() {
   renderPlan();
   renderEvidence();
   renderAnalysis();
+  renderProgramComparisonDetail();
   renderReports();
   applyAccessControl();
 }
